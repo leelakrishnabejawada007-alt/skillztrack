@@ -1,0 +1,17 @@
+{% extends "admin/layout.html" %}{% from "partials/_macros.html" import csrf, icon, logo with context %}
+{% block title %}Admin access only | SkillzTrack{% endblock %}
+{% block body_class %} admin-gate-page{% endblock %}
+{% block adminbar %}{% endblock %}
+{% block main_class %}admin-gate{% endblock %}
+{% block content %}
+<div class="admin-gate-box">
+  <a class="brand admin-gate-brand" href="/dashboard" aria-label="SkillzTrack">{{ logo(40) }}<span class="wordmark">Skillz<span>Track</span></span></a>
+  <section class="card admin-gate-card center">
+    <span class="icon-tile admin-lock">{{ icon("lock") }}</span>
+    <h1>Admin access only</h1>
+    <p class="muted">You are signed in with a student account, which cannot open this page.</p>
+    <a class="btn btn-primary btn-lg btn-block" href="/dashboard">Back to student app</a>
+    <form method="post" action="/admin/logout">{{ csrf() }}<button class="btn btn-lg btn-block" type="submit">Log out and sign in as admin</button></form>
+  </section>
+</div>
+{% endblock %}

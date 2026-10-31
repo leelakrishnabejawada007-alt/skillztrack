@@ -1,0 +1,26 @@
+{% extends "admin/layout.html" %}{% from "partials/_macros.html" import csrf, icon, logo with context %}
+{% block title %}Admin sign in | SkillzTrack{% endblock %}
+{% block body_class %} admin-gate-page{% endblock %}
+{% block adminbar %}{% endblock %}
+{% block main_class %}admin-gate{% endblock %}
+{% block content %}
+<div class="admin-gate-box">
+  <a class="brand admin-gate-brand" href="/admin" aria-label="SkillzTrack admin">{{ logo(40) }}<span class="wordmark">Skillz<span>Track</span></span></a>
+  <section class="card admin-gate-card">
+    <p class="eyebrow">Admin only</p>
+    <h1>Admin sign in</h1>
+    <p class="muted">This area is restricted to administrators.</p>
+    {% if error %}<div class="alert alert-danger" role="alert">{{ icon("alert") }}<p>{{ error }}</p></div>{% endif %}
+    <form method="post" action="/admin/login" novalidate data-validate>
+      {{ csrf() }}<input type="hidden" name="next" value="{{ next }}">
+      <div class="field"><label for="identifier">Admin email or username</label>
+        <div class="input-wrap has-icon"><span class="input-icon">{{ icon("mail") }}</span><input id="identifier" name="identifier" value="{{ identifier }}" autocomplete="username" data-rule="required" required autofocus></div></div>
+      <div class="field"><label for="password">Password</label>
+        <div class="input-wrap has-icon"><span class="input-icon">{{ icon("lock") }}</span><input class="has-reveal" type="password" id="password" name="password" autocomplete="current-password" data-rule="required" required>
+          <button class="reveal" type="button" data-reveal-pw="password" aria-label="Show password" aria-pressed="false">{{ icon("eye") }}</button></div></div>
+      <button class="btn btn-primary btn-lg btn-block" type="submit" data-loading-text="Signing in...">Sign in</button>
+    </form>
+    <p class="auth-alt"><a href="/">Back to the student site</a></p>
+  </section>
+</div>
+{% endblock %}

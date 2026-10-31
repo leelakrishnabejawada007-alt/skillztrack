@@ -12,13 +12,7 @@ EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
 
 def _validate_password(password, username=""):
-    if len(password) < 8:
-        return "Password must be at least 8 characters."
-    if password.isdigit():
-        return "Password cannot be only numbers."
-    if username and password.lower() == username.lower():
-        return "Password cannot be the same as your username."
-    return None
+    return services.password_problem(password, username)
 
 
 # --------------------------------------------------------------------- public

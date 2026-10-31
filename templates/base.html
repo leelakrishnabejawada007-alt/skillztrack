@@ -39,7 +39,6 @@
       {% endif %}
       <div class="side-foot">
         <a href="/profile" class="{{ 'active' if path == '/profile' }}">{{ icon("settings") }}<span>Profile &amp; settings</span></a>
-        {% if user.is_admin %}<a href="/admin" class="{{ 'active' if path.startswith('/admin') }}">{{ icon("users") }}<span>Admin panel</span></a>{% endif %}
         <form method="post" action="/logout">{{ csrf() }}<button type="submit">{{ icon("logout") }}<span>Log out</span></button></form>
       </div>
     </aside>
@@ -58,7 +57,6 @@
             <div class="menu-head"><strong>{{ user.full_name or user.username }}</strong><small>{{ user.email }}</small></div>
             <a href="/profile">{{ icon("settings") }} Profile &amp; career goal</a>
             <a href="/notifications">{{ icon("bell") }} Notifications</a>
-            {% if user.is_admin %}<a href="/admin">{{ icon("users") }} Admin panel</a>{% endif %}
             <form method="post" action="/logout">{{ csrf() }}<button type="submit">{{ icon("logout") }} Log out</button></form>
           </div>
         </details>

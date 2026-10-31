@@ -401,3 +401,20 @@ fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
   .stat strong { font-size: 1.6rem; } .stat-top .icon-tile { display: none; } .card { padding: 1.15rem; }
   .keep-2 .card-tight { padding: .95rem 1rem; }
 }
+
+/* ------------------------------------------------- admin shell, sign-in and "access only" pages */
+.admin-body { background: var(--bg); min-height: 100vh; min-height: 100dvh; }
+.admin-bar { padding-inline: clamp(1rem, 3vw, 2.5rem); }
+.admin-badge { padding: .22rem .7rem; border-radius: 999px; background: var(--text); color: var(--bg); font-size: .68rem; font-weight: 800; letter-spacing: .16em; text-transform: uppercase; }
+.admin-bar-link { min-height: 2.6rem; }
+.admin-main { width: 100%; max-width: 1240px; margin: 0 auto; padding: 1.5rem clamp(1rem, 3vw, 2.5rem) 5rem; outline: none; }
+.admin-tile { display: block; color: inherit; } a.admin-tile:hover { text-decoration: none; transform: translateY(-2px); box-shadow: var(--shadow-2); border-color: var(--line-strong); } .admin-tile { transition: transform .2s var(--ease), box-shadow .2s, border-color .2s; }
+.admin-gate-page { background: linear-gradient(135deg, #0a0e1f 0%, #1e1b4b 55%, #4338ca 130%); }
+.admin-gate { min-height: 100vh; min-height: 100dvh; display: grid; place-items: center; padding: 1.5rem; outline: none; }
+.admin-gate-box { width: 100%; max-width: 26rem; display: grid; gap: 1.5rem; justify-items: stretch; }
+.admin-gate-brand { justify-self: center; } .admin-gate-brand .wordmark { color: #fff; }
+.admin-gate-card { padding: 1.75rem; box-shadow: var(--shadow-3); } .admin-gate-card h1 { font-size: 1.7rem; margin-bottom: .35rem; } .admin-gate-card .muted { margin-bottom: 1.25rem; }
+.admin-gate-card form + form, .admin-gate-card .btn + form { margin-top: .6rem; } .admin-gate-card .btn-block { width: 100%; }
+.admin-gate-card.center { text-align: center; } .admin-gate-card.center .btn-block { display: flex; }
+.admin-lock { margin: 0 auto 1rem; width: 4rem; height: 4rem; border-radius: 50%; background: var(--danger-bg); color: var(--danger); font-size: 1.7rem; }
+@media (max-width: 640px) { .admin-bar-link span { display: none; } .admin-bar-link { padding-inline: .8rem; } }

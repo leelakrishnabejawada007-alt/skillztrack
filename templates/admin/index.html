@@ -1,12 +1,28 @@
-{% extends "base.html" %}{% from "partials/_macros.html" import icon, page_head with context %}
-{% block title %}Admin | SkillzTrack{% endblock %}
+{% extends "admin/layout.html" %}{% from "partials/_macros.html" import icon, page_head with context %}
+{% block title %}Admin dashboard | SkillzTrack{% endblock %}
 {% block content %}
-{% call page_head("Admin", "Admin panel", "Manage the careers, skills and study materials students see.") %}{% endcall %}
+{% call page_head("Admin", "Admin dashboard", "See how students are doing and manage the careers, skills and study materials they see.") %}{% endcall %}
 {% include "admin/_nav.html" %}
+{% macro tile(label, value, note, ic, href="") %}
+<{{ "a" if href else "div" }} class="card stat admin-tile" {% if href %}href="{{ href }}"{% endif %} data-reveal>
+  <div class="stat-top"><span>{{ label }}</span><span class="icon-tile">{{ icon(ic) }}</span></div>
+  <strong>{{ value }}</strong><span>{{ note }}</span>
+</{{ "a" if href else "div" }}>
+{% endmacro %}
 <div class="grid g-4 keep-2 mb-3">
-  {% for label, n in [("Users", counts.users), ("Careers", counts.careers), ("Skills", counts.skills), ("Roadmap materials", counts.resources), ("Roadmaps", counts.roadmaps)] %}
-  <div class="card admin-stat" data-reveal><strong>{{ n }}</strong><span>{{ label }}</span></div>{% endfor %}
+  {{ tile("Students", stats.students, stats.not_started ~ " not started yet", "users", "/admin/users") }}
+  {{ tile("Active roadmaps", stats.roadmaps, "one per student at most", "route") }}
+  {{ tile("Average readiness", ("%.0f"|format(stats.readiness) ~ "%") if stats.readiness is not none else "-", "across active roadmaps", "target") }}
+  {{ tile("Graded attempts", stats.graded, stats.graded_week ~ " in the last 7 days", "clipboard", "/admin/attempts") }}
+  {{ tile("In progress", stats.in_progress, "attempts started, not submitted", "clock", "/admin/attempts") }}
+  {{ tile("Careers", stats.careers, "students can choose from", "compass", "/admin/careers") }}
+  {{ tile("Skills", stats.skills, stats.assignments ~ " graded assignments", "layers", "/admin/skills") }}
+  {{ tile("Study materials", stats.resources, "shown inside roadmaps", "book", "/admin/resources") }}
 </div>
-<section class="card"><div class="card-head"><h2>{{ icon("users") }} Newest users</h2><a class="card-link" href="/admin/users">All users</a></div>
-  {% for u in recent %}<div class="lever"><span><strong>{{ u.username }}</strong> <span class="muted small">{{ u.email }}</span></span><span class="small muted">joined {{ u.created_at }}</span></div>{% else %}<p class="muted mb-0">No users yet.</p>{% endfor %}</section>
+<div class="grid g-2">
+  <section class="card"><div class="card-head"><h2>{{ icon("users") }} Newest students</h2><a class="card-link" href="/admin/users">All users</a></div>
+    {% for u in recent_users %}<div class="lever"><span><a href="/admin/users/{{ u.id }}"><strong>{{ u.username }}</strong></a> <span class="muted small">{{ u.email }}</span></span><span class="small muted">joined {{ u.created_at[:10] }}</span></div>{% else %}<p class="muted mb-0">No students yet.</p>{% endfor %}</section>
+  <section class="card"><div class="card-head"><h2>{{ icon("clipboard") }} Latest graded attempts</h2><a class="card-link" href="/admin/attempts">All attempts</a></div>
+    {% for a in recent_attempts %}<div class="lever"><span><a href="/admin/users/{{ a.user_id }}"><strong>{{ a.username }}</strong></a> <span class="muted small">{{ a.title }}</span></span><span class="small muted nowrap">{{ ("%.0f"|format(a.pct * 100) ~ "%") if a.pct is not none else "-" }} &middot; {{ (a.graded_at or "")[:10] }}</span></div>{% else %}<p class="muted mb-0">Nothing graded yet.</p>{% endfor %}</section>
+</div>
 {% endblock %}

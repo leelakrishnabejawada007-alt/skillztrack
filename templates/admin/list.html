@@ -1,4 +1,4 @@
-{% extends "base.html" %}{% from "partials/_macros.html" import csrf, icon, page_head with context %}
+{% extends "admin/layout.html" %}{% from "partials/_macros.html" import csrf, icon, page_head with context %}
 {% block title %}{{ cfg.title }} | Admin{% endblock %}
 {% block content %}
 {% call page_head("Admin", "Admin panel") %}{% endcall %}

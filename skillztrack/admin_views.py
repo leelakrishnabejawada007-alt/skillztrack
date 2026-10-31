@@ -1,5 +1,12 @@
 """
-Admin panel (/admin) - only for users with is_admin = 1.
+Admin area (/admin) - only for users with is_admin = 1.
+
+    not signed in            -> the admin sign-in page (never the student login)
+    signed in as a student   -> "Admin access only" (HTTP 403)
+    signed in as an admin    -> the dashboard, with its own top bar (no student sidebar)
+
+Admin sign-in rejects student accounts, and 5 wrong passwords lock that account out of /admin for 5 minutes.
+Admins are created from the terminal only (python run.py set-admin ...); no web page can create one.
 
 Instead of writing five near-identical CRUD page sets, one configuration dict (TABLES)
 describes each table's fields, and a few generic views handle list / create / edit / delete.
@@ -9,7 +16,9 @@ dynamic SQL below is safe; all VALUES are passed as ? parameters.
 import re
 import sqlite3
 
-from .web import HTTPError, redirect, render, route
+from . import security, services
+from .web import (HTTPError, clear_attempts, end_session, record_failed_attempt, redirect, render, route, safe_next,
+                  start_session, too_many_attempts)
 
 CATEGORIES = [("programming", "Programming"), ("web", "Web development"), ("data", "Data & AI"),
               ("security", "Security & systems"), ("professional", "Professional skills")]
@@ -149,13 +158,91 @@ def _selected_skill_ids(req):
     return [int(v) for v in req.post_list("skill_ids") if v.isdigit()]
 
 
+# ----------------------------------------------------------------- sign-in / out
+ADMIN_MAX_FAILS = 5  # wrong passwords before the account is locked out of /admin (web.WINDOW_SECONDS = 5 minutes)
+NOT_ADMIN_MESSAGE = "Incorrect email or password, or this account is not an administrator."
+
+
+def _signin_page(req, error, identifier="", nxt="/admin", status=200):
+    return render(req, "admin/signin.html", status=status, error=error, identifier=identifier, next=nxt)
+
+
+def _admin_next(value):
+    """Only ever send an admin back to a page inside /admin."""
+    value = safe_next(value, "/admin")
+    return value if value == "/admin" or value.startswith("/admin/") else "/admin"
+
+
+@route("GET", "/admin/login")
+def admin_login_form(req):
+    return redirect("/admin")
+
+
+@route("POST", "/admin/login")
+def admin_login(req):
+    identifier, password = req.post("identifier"), req.form.get("password", [""])[0]
+    nxt = _admin_next(req.post("next"))
+    key = "admin|" + identifier.lower()  # per account, so guessing from many addresses is limited too
+    if too_many_attempts(key, ADMIN_MAX_FAILS):
+        return _signin_page(req, "Too many failed attempts. Try again in 5 minutes.", identifier, nxt, 429)
+    user = services.find_user_for_login(req.conn, identifier) if identifier else None
+    # Always hash-compare so timing does not reveal whether the account exists.
+    ok = security.verify_password(password, user["password_hash"] if user else "pbkdf2_sha256$1$x$x")
+    if not (user and ok and user["is_admin"]):
+        record_failed_attempt(key)  # a student with the right password is turned away and counted too
+        return _signin_page(req, NOT_ADMIN_MESSAGE, identifier, nxt, 400)
+    clear_attempts(key)
+    old = req.cookies.get("pp_session")  # replace whoever was signed in on this browser
+    if old:
+        req.conn.execute("DELETE FROM sessions WHERE token_hash = ?", (security.hash_token(old),))
+    resp = redirect(nxt, f"Signed in as {user['full_name'] or user['username']}.")
+    start_session(req, resp, user["id"])
+    return resp
+
+
+@route("POST", "/admin/logout")
+def admin_logout(req):
+    resp = redirect("/admin", "You have been signed out.", "info")
+    end_session(req, resp)
+    return resp
+
+
 # ------------------------------------------------------------------ dashboard
 @route("GET", "/admin", admin=True)
 def admin_index(req):
-    counts = {t: req.conn.execute(f"SELECT COUNT(*) AS n FROM {t}").fetchone()["n"]
-              for t in ("users", "careers", "skills", "resources", "roadmaps")}
-    recent = req.conn.execute("SELECT username, email, created_at FROM users ORDER BY id DESC LIMIT 5").fetchall()
-    return render(req, "admin/index.html", counts=counts, recent=recent, tables=TABLES)
+    def one(sql):
+        return req.conn.execute(sql).fetchone()[0]
+    stats = {
+        "students": one("SELECT COUNT(*) FROM users WHERE is_admin = 0"),
+        "not_started": one("SELECT COUNT(*) FROM users u WHERE u.is_admin = 0 AND NOT EXISTS "
+                           "(SELECT 1 FROM attempts a WHERE a.user_id = u.id AND a.status = 'graded')"),
+        "roadmaps": one("SELECT COUNT(*) FROM roadmaps WHERE is_active = 1"),
+        "readiness": one("SELECT AVG(readiness) FROM roadmaps WHERE is_active = 1"),
+        "graded": one("SELECT COUNT(*) FROM attempts WHERE status = 'graded'"),
+        "graded_week": one("SELECT COUNT(*) FROM attempts WHERE status = 'graded' AND graded_at >= datetime('now', '-7 days')"),
+        "in_progress": one("SELECT COUNT(*) FROM attempts WHERE status = 'in_progress'"),
+        "careers": one("SELECT COUNT(*) FROM careers"),
+        "skills": one("SELECT COUNT(*) FROM skills"),
+        "resources": one("SELECT COUNT(*) FROM resources"),
+        "assignments": one("SELECT COUNT(*) FROM assignments"),
+    }
+    recent_users = req.conn.execute(
+        "SELECT id, username, email, created_at FROM users WHERE is_admin = 0 ORDER BY id DESC LIMIT 5").fetchall()
+    recent_attempts = req.conn.execute(
+        "SELECT at.id, u.id AS user_id, u.username, a.title, at.pct, at.graded_at FROM attempts at "
+        "JOIN users u ON u.id = at.user_id JOIN assignments a ON a.id = at.assignment_id "
+        "WHERE at.status = 'graded' ORDER BY at.id DESC LIMIT 8").fetchall()
+    return render(req, "admin/index.html", stats=stats, recent_users=recent_users, recent_attempts=recent_attempts, tables=TABLES)
+
+
+@route("GET", "/admin/attempts", admin=True)
+def admin_attempts(req):
+    """Every graded or started attempt, newest first (read-only; per-student detail is on the user page)."""
+    rows = req.conn.execute(
+        "SELECT at.id, u.id AS user_id, u.username, u.full_name, a.title, a.kind, s.name AS skill, at.attempt_no, at.status, "
+        "at.pct, at.skill_score, at.started_at, at.graded_at FROM attempts at JOIN users u ON u.id = at.user_id "
+        "JOIN assignments a ON a.id = at.assignment_id JOIN skills s ON s.id = a.skill_id ORDER BY at.id DESC LIMIT 500").fetchall()
+    return render(req, "admin/attempts.html", rows=rows, tables=TABLES)
 
 
 # ---------------------------------------------------------------------- users
@@ -166,6 +253,45 @@ def admin_users(req):
         "(SELECT COUNT(*) FROM milestones m JOIN roadmaps r ON r.id = m.roadmap_id WHERE r.user_id = u.id AND m.status='completed') AS done "
         "FROM users u LEFT JOIN careers c ON c.id = u.target_career_id ORDER BY u.id").fetchall()
     return render(req, "admin/users.html", users=users, tables=TABLES)
+
+
+@route("GET", "/admin/users/<int:pk>", admin=True)
+def admin_user_detail(req, pk):
+    """Everything stored about one user, on one page (password hash and session tokens are never shown)."""
+    from . import gamification
+    q = lambda sql, *a: req.conn.execute(sql, (pk, *a)).fetchall()
+    u = req.conn.execute(
+        "SELECT u.id, u.username, u.email, u.full_name, u.is_admin, u.hours_per_week, u.created_at, "
+        "u.target_career_id, c.title AS career FROM users u LEFT JOIN careers c ON c.id = u.target_career_id WHERE u.id = ?",
+        (pk,)).fetchone()
+    if not u:
+        raise HTTPError(404, "User not found.")
+    data = {
+        "sessions": req.conn.execute("SELECT COUNT(*) AS n, MAX(expires_at) AS last FROM sessions WHERE user_id = ?", (pk,)).fetchone(),
+        "self_assessment": q("SELECT s.name, a.level, a.updated_at FROM assessments a JOIN skills s ON s.id = a.skill_id WHERE a.user_id = ? ORDER BY s.name"),
+        "skill_scores": q("SELECT s.name, ss.score, ss.level, ss.confidence, ss.assignments_count, ss.updated_at FROM skill_scores ss JOIN skills s ON s.id = ss.skill_id WHERE ss.user_id = ? ORDER BY ss.score DESC"),
+        "score_history": q("SELECT s.name, h.score, h.level, h.created_at FROM skill_score_history h JOIN skills s ON s.id = h.skill_id WHERE h.user_id = ? ORDER BY h.id DESC LIMIT 100"),
+        "roadmaps": q("SELECT r.id, c.title AS career, r.hours_per_week, r.readiness, r.is_active, r.created_at, "
+                      "(SELECT COUNT(*) FROM milestones m WHERE m.roadmap_id = r.id) AS total, "
+                      "(SELECT COUNT(*) FROM milestones m WHERE m.roadmap_id = r.id AND m.status = 'completed') AS done "
+                      "FROM roadmaps r JOIN careers c ON c.id = r.career_id WHERE r.user_id = ? ORDER BY r.id DESC"),
+        "milestones": q("SELECT m.sequence, m.title, s.name AS skill, m.from_level, m.target_level, m.hours, m.start_week, m.end_week, m.status, m.completed_at, "
+                        "(SELECT COUNT(*) FROM milestone_resources mr WHERE mr.milestone_id = m.id AND mr.done = 1) AS res_done, "
+                        "(SELECT COUNT(*) FROM milestone_resources mr WHERE mr.milestone_id = m.id) AS res_total "
+                        "FROM milestones m JOIN roadmaps r ON r.id = m.roadmap_id JOIN skills s ON s.id = m.skill_id "
+                        "WHERE r.user_id = ? AND r.is_active = 1 ORDER BY m.sequence"),
+        "attempts": q("SELECT at.id, a.title, a.kind, s.name AS skill, at.attempt_no, at.status, at.pct, at.skill_score, at.started_at, at.graded_at, at.duration_seconds "
+                      "FROM attempts at JOIN assignments a ON a.id = at.assignment_id JOIN skills s ON s.id = a.skill_id WHERE at.user_id = ? ORDER BY at.id DESC"),
+        "projects": q("SELECT p.title, pp.status, pp.updated_at FROM project_progress pp JOIN projects p ON p.id = pp.project_id WHERE pp.user_id = ? ORDER BY pp.updated_at DESC"),
+        "achievements": q("SELECT code, earned_at FROM achievements WHERE user_id = ? ORDER BY earned_at DESC"),
+        "activity": q("SELECT kind, title, link, created_at FROM activity_log WHERE user_id = ? ORDER BY id DESC LIMIT 200"),
+        "notifications": q("SELECT kind, title, body, is_read, created_at FROM notifications WHERE user_id = ? ORDER BY id DESC LIMIT 100"),
+    }
+    try:
+        game = gamification.overview(req.conn, pk)
+    except Exception:  # never let a stats problem hide the raw data
+        game = None
+    return render(req, "admin/user_detail.html", u=u, d=data, game=game, tables=TABLES)
 
 
 @route("POST", "/admin/users/<int:pk>/toggle-admin", admin=True)

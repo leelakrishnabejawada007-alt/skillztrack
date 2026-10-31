@@ -230,7 +230,7 @@ class AuthTests(AppTestCase):
         self.assertEqual(r.location, "/roadmap")
 
     def test_protected_pages_redirect_anonymous_users(self):
-        for path in ("/dashboard", "/assess", "/gaps", "/roadmap", "/profile", "/admin"):
+        for path in ("/dashboard", "/assess", "/gaps", "/roadmap", "/profile"):
             r = self.client.get(path)
             self.assertEqual(r.status, 303, path)
             self.assertTrue(r.location.startswith("/login"), path)
@@ -431,11 +431,11 @@ class RenderedHtmlTests(AppTestCase):
             self.assertEqual(r.status, 200, path)
             self.check_balanced(path, r.text)
         admin = self.make_admin()
-        for path in ("/admin", "/admin/users", "/admin/skills", "/admin/resources/new", "/admin/resources/1/edit"):
+        for path in ("/admin", "/admin/users", "/admin/attempts", "/admin/skills", "/admin/resources/new", "/admin/resources/1/edit"):
             r = admin.get(path)
             self.assertEqual(r.status, 200, path)
             self.check_balanced(path, r.text)
-        for path in ("/login", "/register", "/nothing"):
+        for path in ("/login", "/register", "/nothing", "/admin"):
             self.check_balanced(path, Client().get(path).text)
 
 
@@ -445,6 +445,18 @@ class AdminTests(AppTestCase):
         self.assertEqual(self.client.get("/admin").status, 403)
         self.assertEqual(self.client.get("/admin/skills").status, 403)
         self.assertEqual(self.client.post("/admin/skills/new", {"name": "x"}).status, 403)
+        self.assertEqual(self.client.get("/admin/users/1").status, 403)
+
+    def test_admin_sees_everything_about_a_user(self):
+        self.make_roadmap()
+        self.client.post("/milestone/1/status", {"action": "complete"})
+        admin = self.make_admin()
+        r = admin.get("/admin/users/1")
+        self.assertEqual(r.status, 200)
+        for section in ("Verified skill scores", "Roadmaps", "Active roadmap milestones", "Activity log", "Notifications"):
+            self.assertIn(section, r.text)
+        self.assertNotIn("pbkdf2", r.text.lower())
+        self.assertEqual(admin.get("/admin/users/9999").status, 404)
 
     def test_admin_pages_render(self):
         admin = self.make_admin()
@@ -512,3 +524,197 @@ class SecurityUnitTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class AdminGateTests(AppTestCase):
+    """/admin has its own sign-in, rejects students, locks out guessers and never leaks into the student app."""
+
+    def admin_account(self, email="boss@college.edu", password="Str0ng-pass1", name="Boss Person"):
+        conn = db.connect()
+        services.set_admin_account(conn, email, password, name)
+        conn.commit(); conn.close()
+        return email, password
+
+    def sign_in(self, client, email, password, **extra):
+        return client.post("/admin/login", {"identifier": email, "password": password, **extra})
+
+    def test_anonymous_visitors_get_the_admin_sign_in_not_the_student_login(self):
+        for path in ("/admin", "/admin/users", "/admin/attempts", "/admin/skills", "/admin/users/1"):
+            r = self.client.get(path)
+            self.assertEqual(r.status, 200, path)
+            self.assertIn("Admin sign in", r.text, path)
+            self.assertIn('action="/admin/login"', r.text, path)
+            self.assertIn("noindex", r.text, path)
+            self.assertNotIn('id="sidebar"', r.text, path)
+        self.assertEqual(self.client.get("/admin/login").location, "/admin")
+        r = self.client.post("/admin/skills/new", {"name": "x", "slug": "x", "category": "web"})  # nothing is written
+        self.assertEqual((r.status, r.location), (303, "/admin"))
+        self.assertEqual(self.query("SELECT COUNT(*) AS n FROM skills WHERE slug = 'x'")[0]["n"], 0)
+
+    def test_student_accounts_are_rejected_on_the_admin_sign_in(self):
+        self.register(self.client, "asha")
+        self.client.post("/logout")
+        r = self.sign_in(self.client, "asha", "s3cret-pass")
+        self.assertEqual(r.status, 400)
+        self.assertIn("not an administrator", r.text)
+        self.assertNotIn("pp_session", self.client.cookies)  # no session was started
+        self.assertIn("Admin sign in", self.client.get("/admin").text)
+        r = self.sign_in(self.client, "nobody@example.com", "whatever-pass")  # same message for unknown accounts
+        self.assertEqual(r.status, 400)
+        self.assertIn("not an administrator", r.text)
+
+    def test_admin_signs_in_and_gets_the_standalone_dashboard(self):
+        email, password = self.admin_account()
+        self.register(self.client, "asha")  # a student exists so the stats have something to count
+        other = Client()
+        r = self.sign_in(other, email.upper(), password)  # e-mail is case-insensitive
+        self.assertEqual((r.status, r.location), (303, "/admin"))
+        page = other.get("/admin")
+        self.assertEqual(page.status, 200)
+        for text in ("Admin dashboard", "Student app", "Log out", "admin-bar", "not started yet", "Newest students"):
+            self.assertIn(text, page.text)
+        self.assertNotIn('id="sidebar"', page.text)  # no student navigation in the admin shell
+        self.assertEqual(other.get("/admin/attempts").status, 200)
+        self.assertEqual(other.get("/admin/users").status, 200)
+        self.assertEqual(other.get("/admin/hackers").status, 404)
+
+    def test_next_only_returns_to_pages_inside_admin(self):
+        email, password = self.admin_account()
+        for nxt, expected in (("/admin/users", "/admin/users"), ("//evil.example", "/admin"), ("/dashboard", "/admin"),
+                              ("https://evil.example/admin", "/admin"), ("/adminx", "/admin"), ("", "/admin")):
+            c = Client()
+            self.assertEqual(self.sign_in(c, email, password, next=nxt).location, expected, nxt)
+
+    def test_five_wrong_passwords_lock_the_account_for_a_while(self):
+        email, password = self.admin_account()
+        self.admin_account("second@college.edu", "An0ther-pass1", "Second Admin")
+        c = Client()
+        for _ in range(5):
+            self.assertEqual(self.sign_in(c, email, "wrong-password").status, 400)
+        locked = self.sign_in(c, email, password)  # even the right password is refused now
+        self.assertEqual(locked.status, 429)
+        self.assertIn("Too many failed attempts", locked.text)
+        self.assertEqual(self.sign_in(Client(), "second@college.edu", "An0ther-pass1").status, 303)  # others unaffected
+        web._attempts.clear()  # the lock expires after WINDOW_SECONDS; simulate that
+        self.assertEqual(self.sign_in(Client(), email, password).status, 303)
+
+    def test_signed_in_students_see_admin_access_only(self):
+        self.register()
+        for path in ("/admin", "/admin/users", "/admin/attempts", "/admin/skills"):
+            r = self.client.get(path)
+            self.assertEqual(r.status, 403, path)
+            self.assertIn("Admin access only", r.text, path)
+            self.assertIn("Back to student app", r.text, path)
+            self.assertIn("Log out and sign in as admin", r.text, path)
+        self.assertEqual(self.client.get("/dashboard").status, 200)  # the student session is untouched
+        r = self.client.post("/admin/logout")
+        self.assertEqual((r.status, r.location), (303, "/admin"))
+        self.assertEqual(self.client.get("/dashboard").status, 303)  # now signed out
+        self.assertIn("Admin sign in", self.client.get("/admin").text)
+
+    def test_a_student_can_switch_to_an_admin_account_on_the_same_browser(self):
+        email, password = self.admin_account()
+        self.register()
+        self.assertEqual(self.client.get("/admin").status, 403)
+        self.assertEqual(self.sign_in(self.client, email, password).status, 303)
+        self.assertEqual(self.client.get("/admin").status, 200)
+        self.assertEqual(self.query("SELECT COUNT(*) AS n FROM sessions")[0]["n"], 1)  # the student session was replaced
+
+    def test_the_student_app_never_links_to_admin(self):
+        email, password = self.admin_account()
+        c = Client()
+        self.sign_in(c, email, password)
+        for path in ("/dashboard", "/profile", "/assignments"):
+            r = c.get(path)
+            self.assertEqual(r.status, 200, path)
+            self.assertNotIn('href="/admin"', r.text, path)
+            self.assertNotIn("Admin panel", r.text, path)
+        self.assertEqual(c.get("/admin").status, 200)  # but the admin can still open it directly
+
+    def test_admin_logout_returns_to_the_sign_in(self):
+        email, password = self.admin_account()
+        c = Client()
+        self.sign_in(c, email, password)
+        r = c.post("/admin/logout")
+        self.assertEqual((r.status, r.location), (303, "/admin"))
+        self.assertIn("Admin sign in", c.get("/admin").text)
+
+    def test_posts_to_admin_still_need_a_csrf_token(self):
+        email, password = self.admin_account()
+        c = Client()
+        self.sign_in(c, email, password)
+        r = c.request("POST", "/admin/skills/new", {"name": "x"}, send_csrf=False)
+        self.assertEqual(r.status, 403)
+        self.assertEqual(self.client.request("POST", "/admin/login", {"identifier": email, "password": password}, send_csrf=False).status, 403)
+
+    def test_attempts_page_lists_started_and_graded_attempts(self):
+        self.make_roadmap()
+        uid = self.query("SELECT id FROM users WHERE username = 'asha'")[0]["id"]
+        aid = self.query("SELECT id FROM assignments ORDER BY id LIMIT 1")[0]["id"]
+        conn = db.connect()
+        conn.execute("INSERT INTO attempts (user_id, assignment_id, attempt_no, status, pct, skill_score, graded_at) VALUES (?,?,1,'graded',0.9,2.7,datetime('now'))", (uid, aid))
+        conn.execute("INSERT INTO attempts (user_id, assignment_id, status) VALUES (?,?,'in_progress')", (uid, aid))
+        conn.commit(); conn.close()
+        email, password = self.admin_account()
+        c = Client()
+        self.sign_in(c, email, password)
+        page = c.get("/admin/attempts")
+        self.assertEqual(page.status, 200)
+        for text in ("asha", "Graded", "In progress", "90%"):
+            self.assertIn(text, page.text)
+        home = c.get("/admin").text
+        self.assertIn("1 in the last 7 days", home)
+        self.assertIn("Latest graded attempts", home)
+
+
+class AdminCommandTests(AppTestCase):
+    """The terminal commands behind `python run.py set-admin` and `delete-user`."""
+
+    def run_service(self, func, *args):
+        conn = db.connect()
+        try:
+            result = func(conn, *args)
+            conn.commit()
+            return result
+        finally:
+            conn.close()
+
+    def test_set_admin_creates_a_new_admin(self):
+        uid, created = self.run_service(services.set_admin_account, "  New.Admin@College.edu ", "Str0ng-pass1", "New Admin")
+        self.assertTrue(created)
+        row = self.query("SELECT * FROM users WHERE id = ?", uid)[0]
+        self.assertEqual((row["email"], row["username"], row["full_name"], row["is_admin"]), ("new.admin@college.edu", "new.admin", "New Admin", 1))
+        self.assertNotIn("Str0ng-pass1", row["password_hash"])
+        self.assertEqual(Client().post("/admin/login", {"identifier": "new.admin@college.edu", "password": "Str0ng-pass1"}).status, 303)
+
+    def test_set_admin_promotes_an_existing_student_and_resets_the_password(self):
+        self.register()
+        self.assertEqual(self.query("SELECT COUNT(*) AS n FROM sessions")[0]["n"], 1)
+        uid, created = self.run_service(services.set_admin_account, "asha@example.com", "Brand-new-pass9", "")
+        self.assertFalse(created)
+        row = self.query("SELECT * FROM users WHERE id = ?", uid)[0]
+        self.assertEqual((row["is_admin"], row["full_name"]), (1, "Asha Rao"))  # name kept when none is given
+        self.assertEqual(self.query("SELECT COUNT(*) AS n FROM sessions")[0]["n"], 0)  # old sessions ended
+        self.assertEqual(Client().post("/admin/login", {"identifier": "asha", "password": "s3cret-pass"}).status, 400)
+        self.assertEqual(Client().post("/admin/login", {"identifier": "asha", "password": "Brand-new-pass9"}).status, 303)
+
+    def test_set_admin_rejects_bad_input_and_picks_unique_usernames(self):
+        for email, password in (("not-an-email", "Str0ng-pass1"), ("a@b.co", "short"), ("a@b.co", "12345678"), ("a@b.co", "a")):
+            with self.assertRaises(ValueError, msg=(email, password)):
+                self.run_service(services.set_admin_account, email, password, "")
+        self.run_service(services.set_admin_account, "sam@one.edu", "Str0ng-pass1", "")
+        self.run_service(services.set_admin_account, "sam@two.edu", "Str0ng-pass1", "")
+        self.assertEqual(sorted(r["username"] for r in self.query("SELECT username FROM users WHERE is_admin = 1")), ["sam", "sam2"])
+
+    def test_delete_user_removes_accounts_but_never_the_last_admin(self):
+        self.register()
+        self.run_service(services.set_admin_account, "boss@college.edu", "Str0ng-pass1", "Boss")
+        self.assertEqual(self.run_service(services.delete_user_account, "nobody"), (False, "No such user."))
+        deleted, _ = self.run_service(services.delete_user_account, "asha@example.com")
+        self.assertTrue(deleted)
+        deleted, message = self.run_service(services.delete_user_account, "boss@college.edu")
+        self.assertFalse(deleted)
+        self.assertIn("only administrator", message)
+        self.run_service(services.set_admin_account, "second@college.edu", "Str0ng-pass1", "")
+        self.assertTrue(self.run_service(services.delete_user_account, "boss")[0])  # username works too
+        self.assertEqual(self.query("SELECT COUNT(*) AS n FROM users")[0]["n"], 1)

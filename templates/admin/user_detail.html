@@ -1,0 +1,81 @@
+{% extends "admin/layout.html" %}{% from "partials/_macros.html" import csrf, icon, page_head, avatar with context %}
+{% macro pct(v) %}{{ "%.0f"|format(v * 100) ~ "%" if v is not none else "-" }}{% endmacro %}
+{% block title %}{{ u.username }} | Admin{% endblock %}
+{% block content %}
+{% call page_head("Admin - user", u.full_name or u.username, u.email) %}{% endcall %}
+{% include "admin/_nav.html" %}
+<p><a class="btn btn-sm" href="/admin/users">{{ icon("arrow-left") }} All users</a></p>
+
+<section class="card"><h2>Account</h2><div class="table-wrap"><table><tbody>
+  <tr><th>ID</th><td>{{ u.id }}</td></tr>
+  <tr><th>Username</th><td>{{ u.username }}</td></tr>
+  <tr><th>Full name</th><td>{{ u.full_name or "-" }}</td></tr>
+  <tr><th>Email</th><td>{{ u.email }}</td></tr>
+  <tr><th>Role</th><td>{% if u.is_admin %}<span class="chip chip-brand">Admin</span>{% else %}<span class="chip">Student</span>{% endif %}</td></tr>
+  <tr><th>Target career</th><td>{{ u.career or "-" }}</td></tr>
+  <tr><th>Study hours / week</th><td>{{ u.hours_per_week }}</td></tr>
+  <tr><th>Joined</th><td>{{ u.created_at }}</td></tr>
+  <tr><th>Active sessions</th><td>{{ d.sessions.n }}{% if d.sessions.last %} (latest expires {{ d.sessions.last[:16] }}){% endif %}</td></tr>
+</tbody></table></div>
+{% if u.id != user.id %}<p>
+  <form class="inline-form" method="post" action="/admin/users/{{ u.id }}/toggle-admin">{{ csrf() }}<button class="btn btn-sm" type="submit">{{ "Remove admin" if u.is_admin else "Make admin" }}</button></form>
+  <form class="inline-form" method="post" action="/admin/users/{{ u.id }}/delete" data-confirm="Delete {{ u.username }} and all their data?">{{ csrf() }}<button class="btn btn-sm btn-danger" type="submit">Delete user</button></form>
+</p>{% endif %}
+</section>
+
+{% if game %}<section class="card"><h2>Progress summary</h2><div class="table-wrap"><table><tbody>
+  <tr><th>XP / level</th><td>{{ game.xp.xp if game.xp.xp is defined else "" }} {% if game.xp.level is defined %}(level {{ game.xp.level }}){% endif %}</td></tr>
+  <tr><th>Current streak</th><td>{{ game.streak }} days (longest {{ game.longest }})</td></tr>
+  <tr><th>Readiness</th><td>{{ game.stats.readiness }}%</td></tr>
+  <tr><th>Graded attempts</th><td>{{ game.stats.attempts }}</td></tr>
+  <tr><th>Assignments mastered</th><td>{{ game.stats.mastered }}</td></tr>
+  <tr><th>Skills verified</th><td>{{ game.stats.skills_verified }}</td></tr>
+  <tr><th>Badges earned</th><td>{{ game.earned|length }} / {{ game.badges|length }}</td></tr>
+</tbody></table></div></section>{% endif %}
+
+{% macro section(title, rows, headers) %}
+<section class="card"><h2>{{ title }} <span class="small muted">({{ rows|length }})</span></h2>
+{% if rows %}<div class="table-wrap"><table><thead><tr>{% for h in headers %}<th>{{ h }}</th>{% endfor %}</tr></thead><tbody>{{ caller() }}</tbody></table></div>
+{% else %}<p class="muted small">Nothing yet.</p>{% endif %}</section>
+{% endmacro %}
+
+{% call section("Verified skill scores", d.skill_scores, ["Skill","Score","Level","Confidence","Assignments","Updated"]) %}
+{% for r in d.skill_scores %}<tr><td>{{ r.name }}</td><td>{{ "%.2f"|format(r.score) }}</td><td>{{ r.level }}</td><td>{{ r.confidence }}</td><td>{{ r.assignments_count }}</td><td>{{ r.updated_at }}</td></tr>{% endfor %}
+{% endcall %}
+
+{% call section("Self-assessment", d.self_assessment, ["Skill","Level","Updated"]) %}
+{% for r in d.self_assessment %}<tr><td>{{ r.name }}</td><td>{{ r.level }}</td><td>{{ r.updated_at }}</td></tr>{% endfor %}
+{% endcall %}
+
+{% call section("Assignment attempts", d.attempts, ["#","Assignment","Type","Skill","Try","Status","Result","Skill score","Started","Graded","Time"]) %}
+{% for r in d.attempts %}<tr><td>{{ r.id }}</td><td>{{ r.title }}</td><td>{{ r.kind }}</td><td>{{ r.skill }}</td><td>{{ r.attempt_no or "-" }}</td><td>{{ r.status }}</td><td>{{ pct(r.pct) }}</td><td>{{ "%.2f"|format(r.skill_score) if r.skill_score is not none else "-" }}</td><td>{{ r.started_at }}</td><td>{{ r.graded_at or "-" }}</td><td>{{ (r.duration_seconds // 60 ~ "m") if r.duration_seconds else "-" }}</td></tr>{% endfor %}
+{% endcall %}
+
+{% call section("Roadmaps", d.roadmaps, ["#","Career","Hours/week","Readiness","Milestones","Active","Created"]) %}
+{% for r in d.roadmaps %}<tr><td>{{ r.id }}</td><td>{{ r.career }}</td><td>{{ r.hours_per_week }}</td><td>{{ "%.0f"|format(r.readiness) }}%</td><td>{{ r.done }} / {{ r.total }}</td><td>{{ "Yes" if r.is_active else "No" }}</td><td>{{ r.created_at }}</td></tr>{% endfor %}
+{% endcall %}
+
+{% call section("Active roadmap milestones", d.milestones, ["#","Milestone","Skill","Level","Hours","Weeks","Materials","Status","Completed"]) %}
+{% for r in d.milestones %}<tr><td>{{ r.sequence }}</td><td>{{ r.title }}</td><td>{{ r.skill }}</td><td>{{ r.from_level }} &rarr; {{ r.target_level }}</td><td>{{ r.hours }}</td><td>{{ r.start_week }}-{{ r.end_week }}</td><td>{{ r.res_done }} / {{ r.res_total }}</td><td>{{ r.status|replace("_"," ") }}</td><td>{{ r.completed_at or "-" }}</td></tr>{% endfor %}
+{% endcall %}
+
+{% call section("Projects", d.projects, ["Project","Status","Updated"]) %}
+{% for r in d.projects %}<tr><td>{{ r.title }}</td><td>{{ r.status|replace("_"," ") }}</td><td>{{ r.updated_at }}</td></tr>{% endfor %}
+{% endcall %}
+
+{% call section("Badges", d.achievements, ["Badge","Earned"]) %}
+{% for r in d.achievements %}<tr><td>{{ r.code }}</td><td>{{ r.earned_at }}</td></tr>{% endfor %}
+{% endcall %}
+
+{% call section("Skill score history", d.score_history, ["Skill","Score","Level","When"]) %}
+{% for r in d.score_history %}<tr><td>{{ r.name }}</td><td>{{ "%.2f"|format(r.score) }}</td><td>{{ r.level }}</td><td>{{ r.created_at }}</td></tr>{% endfor %}
+{% endcall %}
+
+{% call section("Activity log", d.activity, ["Type","What","When"]) %}
+{% for r in d.activity %}<tr><td>{{ r.kind }}</td><td>{{ r.title }}</td><td>{{ r.created_at }}</td></tr>{% endfor %}
+{% endcall %}
+
+{% call section("Notifications", d.notifications, ["Type","Title","Message","Read","When"]) %}
+{% for r in d.notifications %}<tr><td>{{ r.kind }}</td><td>{{ r.title }}</td><td>{{ r.body }}</td><td>{{ "Yes" if r.is_read else "No" }}</td><td>{{ r.created_at }}</td></tr>{% endfor %}
+{% endcall %}
+{% endblock %}

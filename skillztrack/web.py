@@ -225,11 +225,11 @@ _attempts, _attempts_lock = {}, threading.Lock()
 MAX_ATTEMPTS, WINDOW_SECONDS = 8, 300
 
 
-def too_many_attempts(key):
+def too_many_attempts(key, limit=MAX_ATTEMPTS):
     with _attempts_lock:
         fresh = [t for t in _attempts.get(key, []) if time.time() - t < WINDOW_SECONDS]
         _attempts[key] = fresh
-        return len(fresh) >= MAX_ATTEMPTS
+        return len(fresh) >= limit
 
 
 def record_failed_attempt(key):
@@ -268,11 +268,18 @@ def dispatch(req):
             sent = req.post("csrf_token") or req.environ.get("HTTP_X_CSRF_TOKEN", "")
             if not security.tokens_match(sent, req.cookies.get("pp_csrf")):
                 raise HTTPError(403, "Security check failed. Please reload the page and try again.")
-        if needs_login and not req.user:
+        if needs_admin:
+            # The admin area has its own gate (it never sends people to the student login):
+            #   not signed in -> admin sign-in page, signed in as a student -> "Admin access only" (403).
+            if not req.user:
+                if req.method == "GET":
+                    return render(req, "admin/signin.html", error=None, identifier="", next=req.path)
+                return redirect("/admin", "Please sign in as an administrator.", "info")
+            if not req.user["is_admin"]:
+                return render(req, "admin/denied.html", status=403)
+        elif needs_login and not req.user:
             return redirect("/login?next=" + quote(req.path) if req.method == "GET" else "/login",
                             "Please log in to continue.", "info")
-        if needs_admin and not req.user["is_admin"]:
-            raise HTTPError(403, "This area is for administrators only.")
         params = {k: int(v) if k in int_params else v for k, v in m.groupdict().items()}
         return func(req, **params)
     raise HTTPError(405 if matched_path else 404, "That page does not exist." if not matched_path else "")

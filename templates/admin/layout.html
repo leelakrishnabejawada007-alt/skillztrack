@@ -1,0 +1,46 @@
+{% from "partials/_macros.html" import csrf, icon, logo, wordmark, avatar with context %}<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>{% block title %}Admin | SkillzTrack{% endblock %}</title>
+  <meta name="robots" content="noindex, nofollow">
+  <meta name="csrf-token" content="{{ csrf_token }}">
+  <meta name="color-scheme" content="light dark">
+  <meta name="theme-color" content="#6366f1">
+  <link rel="icon" href="/static/img/favicon.svg" type="image/svg+xml">
+  <script src="/static/js/boot.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link href="/static/css/skillztrack.css" rel="stylesheet">
+</head>
+<body class="admin-body{% block body_class %}{% endblock %}">
+  {% include "partials/_sprite.html" %}
+  <a class="skip-link" href="#main">Skip to main content</a>
+{% block adminbar %}
+  {# The admin area has its own top bar: no student sidebar, no student navigation. #}
+  <header class="topbar admin-bar">
+    <a class="brand" href="/admin" aria-label="SkillzTrack admin home">{{ logo(32) }}{{ wordmark() }}</a>
+    <span class="admin-badge">Admin</span>
+    <div class="topbar-spacer"></div>
+    <button class="icon-btn" type="button" data-theme-toggle aria-label="Switch colour theme"><span class="theme-sun">{{ icon("sun") }}</span><span class="theme-moon">{{ icon("moon") }}</span></button>
+    <a class="btn btn-sm admin-bar-link" href="/dashboard">{{ icon("home") }}<span>Student app</span></a>
+    <form class="inline-form" method="post" action="/admin/logout">{{ csrf() }}
+      <button class="btn btn-sm admin-bar-link" type="submit" title="Signed in as {{ user.full_name or user.username }}">{{ icon("logout") }}<span>Log out</span></button></form>
+  </header>
+{% endblock %}
+  <main id="main" class="{% block main_class %}admin-main{% endblock %}" tabindex="-1">{% block content %}{% endblock %}</main>
+
+  {% if flash %}
+  <div class="toasts" role="status" aria-live="polite">
+    <div class="toast toast-{{ flash.category }}" data-toast>
+      <span class="toast-icon">{{ icon({"success": "check-circle", "info": "info", "warning": "alert", "danger": "alert"}[flash.category]) }}</span>
+      <p>{{ flash.message }}</p>
+      <button type="button" class="toast-close" data-toast-close aria-label="Dismiss message">{{ icon("x") }}</button>
+    </div>
+  </div>
+  {% endif %}
+  <dialog class="confirm" id="confirmDialog" aria-labelledby="confirmText"><form method="dialog"><p id="confirmText"></p><div class="confirm-actions"><button class="btn btn-ghost" value="cancel">Cancel</button><button class="btn btn-primary" value="ok" autofocus>Confirm</button></div></form></dialog>
+  <script src="/static/js/main.js" defer></script>
+</body>
+</html>

@@ -6,6 +6,7 @@ The actual *rules* (gap, priority, ordering, resource choice) live in engine.py;
 this module only moves data between SQLite and the engine.
 """
 import json
+import re
 import sqlite3
 from collections import defaultdict
 
@@ -24,6 +25,66 @@ def create_user(conn, username, email, full_name, password):
         (username, email.lower(), full_name, security.hash_password(password)),
     )
     return cur.lastrowid
+
+
+def password_problem(password, username=""):
+    """Shared password rule (registration, profile and the admin command-line tools). None = fine."""
+    if len(password) < 8:
+        return "Password must be at least 8 characters."
+    if password.isdigit():
+        return "Password cannot be only numbers."
+    if username and password.lower() == username.lower():
+        return "Password cannot be the same as your username."
+    return None
+
+
+_EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+
+
+def set_admin_account(conn, email, password, name=""):
+    """Create an admin account, or promote an existing user and reset their password.
+
+    Terminal only (python run.py set-admin ...): there is deliberately no web route that can make an admin
+    out of a stranger. Existing sessions of that account are ended so a changed password takes effect.
+    Returns (user_id, created).
+    """
+    email = email.strip().lower()
+    if not _EMAIL_RE.match(email) or len(email) > 120:
+        raise ValueError("Enter a valid email address.")
+    problem = password_problem(password, email.split("@")[0])
+    if problem:
+        raise ValueError(problem)
+    name = (name or "").strip()[:60]
+    row = conn.execute("SELECT id FROM users WHERE email = ?", (email,)).fetchone()
+    if row:
+        conn.execute("UPDATE users SET password_hash = ?, is_admin = 1, full_name = COALESCE(NULLIF(?, ''), full_name) WHERE id = ?",
+                     (security.hash_password(password), name, row["id"]))
+        conn.execute("DELETE FROM sessions WHERE user_id = ?", (row["id"],))
+        return row["id"], False
+    base = re.sub(r"[^A-Za-z0-9_.-]", "", email.split("@")[0])[:24] or "admin"
+    base = base.ljust(3, "0")
+    username, n = base, 1
+    while conn.execute("SELECT 1 FROM users WHERE username = ?", (username,)).fetchone():
+        n += 1
+        username = f"{base}{n}"
+    uid = create_user(conn, username, email, name or username, password)
+    conn.execute("UPDATE users SET is_admin = 1 WHERE id = ?", (uid,))
+    return uid, True
+
+
+def delete_user_account(conn, identifier):
+    """Delete a user (and, through ON DELETE CASCADE, all their data) by username or email.
+
+    Refuses to delete the last remaining administrator so nobody is locked out of /admin.
+    Returns (deleted, message).
+    """
+    user = find_user_for_login(conn, identifier.strip()) if identifier.strip() else None
+    if not user:
+        return False, "No such user."
+    if user["is_admin"] and conn.execute("SELECT COUNT(*) AS n FROM users WHERE is_admin = 1").fetchone()["n"] <= 1:
+        return False, "That is the only administrator. Create another one first (set-admin), then delete this one."
+    conn.execute("DELETE FROM users WHERE id = ?", (user["id"],))
+    return True, f"Deleted {user['username']}."
 
 
 def find_user_for_login(conn, identifier):

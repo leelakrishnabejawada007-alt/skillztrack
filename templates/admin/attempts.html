@@ -1,0 +1,27 @@
+{% extends "admin/layout.html" %}{% from "partials/_macros.html" import icon, page_head with context %}
+{% block title %}Attempts | Admin{% endblock %}
+{% block content %}
+{% call page_head("Admin", "Attempts", "Every assignment attempt, newest first (latest 500). Open a student for the full per-test breakdown.") %}{% endcall %}
+{% include "admin/_nav.html" %}
+<div data-filter-root>
+  <div class="toolbar">
+    <label class="search" for="atSearch"><span class="sr-only">Search attempts</span>{{ icon("search") }}<input id="atSearch" type="search" placeholder="Search by student, assignment or skill" data-filter-search autocomplete="off"></label>
+    <div class="seg" data-filter-key="status" role="group" aria-label="Filter by status">
+      <button type="button" data-value="all" aria-pressed="true">All</button><button type="button" data-value="graded" aria-pressed="false">Graded</button><button type="button" data-value="in_progress" aria-pressed="false">In progress</button></div>
+    <span class="muted small" data-filter-count aria-live="polite"></span>
+  </div>
+  <section class="card"><div class="table-wrap"><table>
+    <thead><tr><th scope="col">When</th><th scope="col">Student</th><th scope="col">Assignment</th><th scope="col">Skill</th><th scope="col">Try</th><th scope="col">Result</th><th scope="col">Status</th></tr></thead>
+    <tbody>{% for r in rows %}
+      <tr data-filter-item data-status="{{ r.status }}" data-text="{{ (r.username ~ ' ' ~ r.full_name ~ ' ' ~ r.title ~ ' ' ~ r.skill ~ ' ' ~ r.kind)|lower }}">
+        <td class="nowrap small">{{ (r.graded_at or r.started_at)[:16] }}</td>
+        <td><a href="/admin/users/{{ r.user_id }}"><strong>{{ r.username }}</strong></a></td>
+        <td>{{ r.title }} <span class="chip">{{ r.kind }}</span></td><td>{{ r.skill }}</td>
+        <td>{{ r.attempt_no or "-" }}</td>
+        <td>{% if r.pct is not none %}{{ "%.0f"|format(r.pct * 100) }}% <span class="muted small">(skill {{ "%.1f"|format(r.skill_score or 0) }})</span>{% else %}-{% endif %}</td>
+        <td>{% if r.status == "graded" %}<span class="chip chip-success">Graded</span>{% else %}<span class="chip chip-warn">In progress</span>{% endif %}</td></tr>
+    {% else %}<tr><td colspan="7" class="center muted" style="padding:2rem">No attempts yet.</td></tr>{% endfor %}
+    </tbody></table></div>
+    <p class="center muted" data-filter-empty hidden style="padding:1rem">No attempts match.</p></section>
+</div>
+{% endblock %}

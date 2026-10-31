@@ -1,4 +1,4 @@
-{% extends "base.html" %}{% from "partials/_macros.html" import csrf, field_error, icon, page_head with context %}
+{% extends "admin/layout.html" %}{% from "partials/_macros.html" import csrf, field_error, icon, page_head with context %}
 {% block title %}{{ "Edit" if obj else "Add" }} {{ cfg.singular }} | Admin{% endblock %}
 {% block content %}
 {% call page_head("Admin", "Admin panel") %}{% endcall %}

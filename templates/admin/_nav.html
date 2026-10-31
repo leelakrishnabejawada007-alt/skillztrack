@@ -1,5 +1,6 @@
 <ul class="subnav" aria-label="Admin sections">
   <li><a class="{{ 'active' if path == '/admin' }}" href="/admin">Overview</a></li>
-  <li><a class="{{ 'active' if path == '/admin/users' }}" href="/admin/users">Users</a></li>
+  <li><a class="{{ 'active' if path.startswith('/admin/users') }}" href="/admin/users">Users</a></li>
+  <li><a class="{{ 'active' if path == '/admin/attempts' }}" href="/admin/attempts">Attempts</a></li>
   {% for key, cfg in tables.items() %}<li><a class="{{ 'active' if path.startswith('/admin/' ~ key) }}" href="/admin/{{ key }}">{{ cfg.title }}</a></li>{% endfor %}
 </ul>

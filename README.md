@@ -51,9 +51,9 @@ skillztrack/
 |   |-- events.py           Activity log, notifications, badge awarding (called after each action)
 |   |-- security.py         Password hashing, session & CSRF tokens
 |   |-- web.py              Mini web layer: routing, sessions, CSRF, headers, errors
-|   |-- views.py            Student pages        admin_views.py  Admin panel
+|   |-- views.py            Student pages        admin_views.py  Admin area (sign-in, dashboard, CRUD)
 |   `-- app.py              Registers routes, exposes `application`
-|-- templates/              Jinja2 HTML (base.html + one file per page; admin/, auth/)
+|-- templates/              Jinja2 HTML (base.html + one file per page; admin/ has its own layout.html; auth/)
 |-- static/css, static/js   skillztrack.css (design system), main.js (interactions + SVG charts), boot.js (theme)
 `-- tests/                  engine, app, assessment, bank, beginner-track and SkillzTrack feature tests
 ```
@@ -64,7 +64,7 @@ cd path\to\skillztrack
 py -m venv venv
 .\venv\Scripts\Activate.ps1          # if blocked: Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
 pip install -r requirements.txt
-python run.py createadmin            # optional: make your admin account
+python run.py set-admin you@college.edu "YourStrongPass1" "Your Name"   # make your admin account
 python run.py                        # open http://127.0.0.1:8000
 ```
 The database file `skillztrack.db` and the starter catalogue are created automatically on first start.
@@ -133,11 +133,36 @@ when your *verified* level reaches its target; ticking study materials never rai
 - Not implemented on purpose: the original author removed the standalone Projects and Resource Library pages (a test documents this);
   SkillzTrack keeps them removed. Study materials appear inside each roadmap milestone.
 
+## Admin area (/admin)
+A separate, admin-only area with its own sign-in, top bar and dashboard (it does not use the student sidebar).
+
+| Who opens `/admin` | What they see |
+|---|---|
+| Not signed in | **Admin sign in** page (never the student login). Student accounts are rejected there and no session is started. |
+| Signed in as a student | **Admin access only** (HTTP 403) with "Back to student app" and "Log out and sign in as admin". |
+| Signed in as an admin | The dashboard: stats, newest students, latest graded attempts, plus Users, Attempts, Careers, Skills, Requirements and Materials. |
+
+- **Dashboard stats:** students (and how many have not graded anything yet), active roadmaps, average readiness, graded attempts
+  (and the last 7 days), attempts in progress, careers, skills and study materials. Tiles link to the matching list.
+- **Users:** search, open one student to see everything stored about them, make/remove admin, delete. **Attempts:** every attempt with
+  status filter and search. **Careers / Skills / Requirements / Materials:** add, edit, delete (with validation).
+- **Protection:** every admin route checks the role on the server (not just the page), every POST needs the CSRF token, the student app
+  has no link to `/admin` (admins type the address), and the pages are marked `noindex`. **Five wrong passwords lock that account out of
+  `/admin` for 5 minutes** (in memory, per server process). Admin accounts can only be created from the terminal, never over HTTP.
+
+**Make yourself the only admin** (do this once):
+```powershell
+python run.py set-admin you@college.edu "YourStrongPass1" "Your Name"   # creates the admin, or promotes + resets an existing account
+python run.py delete-user someone@college.edu                           # username or email; refuses to delete the last admin
+```
+Leave the password out (`python run.py set-admin you@college.edu`) and you are asked for it without it appearing in your shell history.
+`python run.py createadmin` (interactive) and the `SKILLZTRACK_ADMIN_*` environment variables for hosts without a shell still work.
+
 ## Security measures
 PBKDF2-SHA256 password hashing (600k iterations, per-user salt) - server-side sessions (only a hash of
 the token is stored) - HttpOnly + SameSite=Lax cookies (+ Secure in production) - CSRF token on every POST -
 Jinja2 auto-escaping (XSS) - parameterised SQL only (SQL injection) - open-redirect protection on `next` -
-login rate limiting - role checks on every admin route, ownership checks on every student record -
+login rate limiting (plus a stricter 5-attempt lockout on the admin sign-in) - role checks on every admin route, ownership checks on every student record -
 security headers incl. Content-Security-Policy - request size limit.
 
 ## Deployment (Render)
@@ -161,7 +186,7 @@ Steps:
    Build `pip install -r requirements.txt`, Start `gunicorn wsgi:application --workers 2 --threads 4 --bind 0.0.0.0:$PORT`.
 3. Add environment variables from the table, plus `SKILLZTRACK_ADMIN_USERNAME/EMAIL/PASSWORD` for the first admin
    (delete the PASSWORD variable after the first successful start).
-4. Open the URL, log in, visit `/admin`.
+4. Open `<your-url>/admin` and sign in with the admin account.
 
 **Free-tier caveat:** Render's free web services have an *ephemeral* filesystem, so a SQLite file is wiped
 on every redeploy/restart. Use a paid plan with a persistent disk (as in `render.yaml`), or port `db.py` to
@@ -191,5 +216,3 @@ profile - admin overview - dark mode - mobile view of dashboard & roadmap.
 - Beginner/Easy tasks allow 10 retries with no retry penalty. Harder tasks keep the old rules.
 - Grading still uses hidden test cases and rubrics, gives a 0-5 skill score, and updates the skill profile and roadmap.
 - Tests: `tests/test_beginner.py`.
-#   s k i l l z t r a c k  
- 
