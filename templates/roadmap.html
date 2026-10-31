@@ -1,0 +1,86 @@
+{% extends "base.html" %}{% from "partials/_macros.html" import csrf, icon, ring, progress, status_badge, empty, page_head with context %}
+{% block title %}Roadmap | SkillzTrack{% endblock %}
+{% block content %}
+{% if not view %}
+  {{ empty("route", "No roadmap yet", ("Verify your skills with an assignment, review your gaps, then generate a roadmap for " ~ career.title ~ "." if career else "Choose a career, verify your skills, then generate your roadmap."), ("/gaps" if career else "/dashboard"), ("Review my gaps" if career else "Choose a career")) }}
+{% else %}
+  {% set rm = view.roadmap %}
+  {% call page_head("Personalised roadmap", rm.career_title, "A week-by-week plan built from your verified gaps, at " ~ rm.hours_per_week ~ " study hours per week.") %}
+    <a class="btn" href="/gaps">{{ icon("refresh") }} Change hours / recalculate</a>
+  {% endcall %}
+
+  <section class="card flex wrap-row gap-3 items-center mb-2" data-reveal aria-label="Roadmap summary">
+    {{ ring(view.percent, "Roadmap progress", 120, "complete") }}
+    <div class="grow">
+      <div class="kv">
+        <div><strong>{{ view.upcoming|length }}</strong><span>milestones left</span></div>
+        <div><strong>~{{ view.total_weeks }}</strong><span>weeks at {{ rm.hours_per_week }} h/wk</span></div>
+        <div><strong>{{ view.remaining_hours }}</strong><span>hours left</span></div>
+        <div><strong>{{ view.completed|length }}</strong><span>completed</span></div>
+      </div>
+      <p class="sr-only">Roadmap progress <span data-roadmap-percent>{{ view.percent }}</span>%</p>
+    </div>
+  </section>
+  <p class="pagehint mb-3">{{ icon("info") }} <span>This roadmap is generated with simple rules, not AI, from your graded assignments. Milestones complete automatically when your verified level reaches the target; ticking study materials shows study progress but never raises your level. Open "Why this milestone?" to see the reasoning for each step. Dates are estimates counted from the day the roadmap was generated.</span></p>
+
+  <div data-filter-root>
+    {% if view.upcoming %}
+    <div class="toolbar">
+      <div class="seg" data-filter-key="status" role="group" aria-label="Filter milestones"><button type="button" data-value="all" aria-pressed="true">All</button><button type="button" data-value="in_progress" aria-pressed="false">In progress</button><button type="button" data-value="not_started" aria-pressed="false">Not started</button></div>
+      <span class="muted small" data-filter-count aria-live="polite"></span>
+    </div>
+    {% endif %}
+    {% for m in view.upcoming %}
+    <article class="card ms" id="m{{ m.id }}" data-filter-item data-status="{{ m.status }}" data-text="{{ m.title|lower }}" data-reveal>
+      <div class="ms-head">
+        <div class="flex gap-2 items-center"><span class="ms-step">{{ m.sequence }}</span>
+          <div><div class="chips"><span class="chip chip-brand">Weeks {{ m.start_week }}&ndash;{{ m.end_week }}</span>{% if m.is_priority %}<span class="chip chip-warn">{{ icon("flame") }} Top priority</span>{% endif %}</div>
+            <span class="small muted">about {{ m.hours }} h{% if m.start_date %} &middot; <span class="date-chip">{{ icon("calendar") }} {{ m.start_date }} &ndash; {{ m.end_date }}</span>{% endif %}</span></div></div>
+        <span data-status-for="{{ m.id }}">{{ status_badge(m.status) }}</span>
+      </div>
+      <div class="ms-body">
+        <h2>{{ m.title }}</h2>
+        <p class="small muted">From <strong>{{ m.from_label }}</strong> (level {{ m.from_level }}) to <strong>{{ m.target_label }}</strong> (level {{ m.target_level }})</p>
+        {% if m.profile %}<p class="small mb-1">{% if m.profile.verified %}{{ icon("shield-check", "text-brand") }} Verified <strong>{{ "%.1f"|format(m.profile.score) }}/5</strong>, target level {{ m.target_level }}.{% else %}<span class="chip">Unverified</span> take an assessment to start.{% endif %}
+          {% if m.focus %}<br>{{ icon("target", "text-warn") }} Focus on: <strong>{{ m.focus|join(", ") }}</strong>{% endif %}</p>{% endif %}
+        <details class="why"><summary>Why this milestone?</summary><p>{{ m.reason }}</p></details>
+
+        <div class="flex between small mb-1"><span>Study materials completed</span><b data-resource-count="{{ m.id }}">{{ m.done }}/{{ m.total }}</b></div>
+        <div data-milestone-bar="{{ m.id }}">{{ progress(m.percent, "Study materials completed for " ~ m.skill_name) }}</div>
+
+        {% if m["items"] %}
+        <ul class="todo">
+          {% for i in m["items"] %}
+          <li class="{{ 'done' if i.done }}">
+            <form method="post" action="/item/{{ i.id }}/toggle" data-item-form>{{ csrf() }}<input type="hidden" name="done" value="{{ 0 if i.done else 1 }}">
+              <button class="check" type="submit" data-title="{{ i.title }}" aria-label="{{ 'Mark as not done' if i.done else 'Mark as done' }}: {{ i.title }}" aria-pressed="{{ 'true' if i.done else 'false' }}">{{ icon("check") }}</button></form>
+            <div><a class="t" href="{{ i.url }}" target="_blank" rel="noopener noreferrer">{{ i.title }} {{ icon("external") }}</a>
+              <small>{{ i.provider }} &middot; {{ i.difficulty|capitalize }} &middot; {{ i.rtype|capitalize }} &middot; ~{{ i.hours }} h{% if not i.is_free %} &middot; may require payment{% endif %}</small></div>
+          </li>
+          {% endfor %}
+        </ul>
+        {% else %}<p class="small muted mt-2">No study materials for this skill yet.</p>{% endif %}
+
+        <div class="flex wrap-row gap-1">
+          {% if m.status == "not_started" %}<form method="post" action="/milestone/{{ m.id }}/status">{{ csrf() }}<input type="hidden" name="action" value="start"><button class="btn btn-sm" type="submit">{{ icon("play") }} Start milestone</button></form>{% endif %}
+          {% if m.profile and m.profile.next %}<a class="btn btn-primary btn-sm" href="/assignments/{{ m.profile.next.slug }}">{{ icon("clipboard") }} Prove it: {{ m.profile.next.title }}</a>{% else %}<a class="btn btn-primary btn-sm" href="/assignments#skill-{{ m.skill_id }}">{{ icon("clipboard") }} Prove it: take an assessment</a>{% endif %}
+        </div>
+      </div>
+    </article>
+    {% else %}
+    <div class="alert alert-success">{{ icon("trophy") }}<p>All milestones are complete. Nice work! Review your <a href="/gaps">skill gaps</a> to confirm you are career-ready.</p></div>
+    {% endfor %}
+    <div data-filter-empty hidden>{{ empty("filter", "No milestones in this view", "Switch the filter to see the rest of your roadmap.") }}</div>
+  </div>
+
+  {% if view.completed %}
+  <h2 class="mt-4 mb-2">Completed milestones ({{ view.completed|length }})</h2>
+  {% for m in view.completed %}
+  <div class="card done-card" id="m{{ m.id }}">
+    <div>{{ icon("check-circle", "text-success") }} <strong>{{ m.title }}</strong> <span class="small muted">(level {{ m.from_level }} &rarr; {{ m.target_level }})</span></div>
+    <form method="post" action="/milestone/{{ m.id }}/status">{{ csrf() }}<input type="hidden" name="action" value="reopen"><button class="link-btn" type="submit">Re-open</button></form>
+  </div>
+  {% endfor %}
+  {% endif %}
+{% endif %}
+{% endblock %}

@@ -1,0 +1,113 @@
+{% from "partials/_macros.html" import csrf, icon, logo, wordmark, avatar with context %}<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>{% block title %}SkillzTrack | Prove your skills. Close your gaps. Land your career.{% endblock %}</title>
+  <meta name="description" content="SkillzTrack verifies your real skill level with graded assignments, shows your gaps for the career you want, and builds a week-by-week roadmap to close them.">
+  <meta name="csrf-token" content="{{ csrf_token }}">
+  <meta name="color-scheme" content="light dark">
+  <meta name="theme-color" content="#6366f1">
+  <link rel="icon" href="/static/img/favicon.svg" type="image/svg+xml">
+  <script src="/static/js/boot.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link href="/static/css/skillztrack.css" rel="stylesheet">
+</head>
+<body class="{{ 'app' if user else 'public' }}{% block body_class %}{% endblock %}">
+  {% include "partials/_sprite.html" %}
+  <div class="nav-progress" id="navProgress" aria-hidden="true"></div>
+  <a class="skip-link" href="#main">Skip to main content</a>
+
+{% if user %}
+  {# ------------------------------------------------------------------ signed-in app shell #}
+  <div class="shell">
+    <aside class="sidebar" id="sidebar" aria-label="Primary">
+      <a class="brand" href="/dashboard" aria-label="SkillzTrack dashboard">{{ logo(36) }}{{ wordmark() }}</a>
+      <nav class="side-nav" aria-label="Main navigation">
+        {% set nav_items = [("/dashboard","home","Dashboard"),("/assignments","clipboard","Assessments"),("/skill-profile","layers","Skill profile"),("/gaps","target","Skill gaps"),("/roadmap","route","Roadmap"),("/achievements","award","Achievements")] %}
+        {% for href, ic, label in nav_items %}
+          {% set active = path == href or (href == "/assignments" and (path.startswith("/assignments") or path.startswith("/attempts"))) %}
+          <a href="{{ href }}" class="{{ 'active' if active }}" {% if active %}aria-current="page"{% endif %}>{{ icon(ic) }}<span>{{ label }}</span></a>
+        {% endfor %}
+      </nav>
+      {% if nav_career %}
+      <a class="side-career" href="/dashboard#careerPicker" title="Change target career">
+        <span class="side-career-icon">{{ icon(nav_career.icon) }}</span>
+        <span><small>Target career</small><strong>{{ nav_career.title }}</strong></span>
+      </a>
+      {% endif %}
+      <div class="side-foot">
+        <a href="/profile" class="{{ 'active' if path == '/profile' }}">{{ icon("settings") }}<span>Profile &amp; settings</span></a>
+        {% if user.is_admin %}<a href="/admin" class="{{ 'active' if path.startswith('/admin') }}">{{ icon("users") }}<span>Admin panel</span></a>{% endif %}
+        <form method="post" action="/logout">{{ csrf() }}<button type="submit">{{ icon("logout") }}<span>Log out</span></button></form>
+      </div>
+    </aside>
+    <div class="scrim" data-drawer-close hidden></div>
+
+    <div class="main-col">
+      <header class="topbar">
+        <button class="icon-btn only-mobile" type="button" data-drawer-open aria-controls="sidebar" aria-expanded="false" aria-label="Open navigation">{{ icon("menu") }}</button>
+        <a class="brand brand-mobile only-mobile" href="/dashboard" aria-label="SkillzTrack dashboard">{{ logo(30) }}</a>
+        <div class="topbar-spacer"></div>
+        <button class="icon-btn" type="button" data-theme-toggle aria-label="Switch colour theme"><span class="theme-sun">{{ icon("sun") }}</span><span class="theme-moon">{{ icon("moon") }}</span></button>
+        <a class="icon-btn bell" href="/notifications" aria-label="Notifications{% if unread %}, {{ unread }} unread{% endif %}" data-bell>{{ icon("bell") }}<b class="bell-badge" data-bell-badge {% if not unread %}hidden{% endif %}>{{ unread if unread < 10 else "9+" }}</b></a>
+        <details class="menu" data-menu>
+          <summary aria-label="Account menu">{{ avatar(user) }}<span class="menu-name">{{ user.full_name.split()[0] if user.full_name else user.username }}</span>{{ icon("chevron-down") }}</summary>
+          <div class="menu-panel">
+            <div class="menu-head"><strong>{{ user.full_name or user.username }}</strong><small>{{ user.email }}</small></div>
+            <a href="/profile">{{ icon("settings") }} Profile &amp; career goal</a>
+            <a href="/notifications">{{ icon("bell") }} Notifications</a>
+            {% if user.is_admin %}<a href="/admin">{{ icon("users") }} Admin panel</a>{% endif %}
+            <form method="post" action="/logout">{{ csrf() }}<button type="submit">{{ icon("logout") }} Log out</button></form>
+          </div>
+        </details>
+      </header>
+{% else %}
+  {# ------------------------------------------------------------------------- public site #}
+  <header class="site-nav" id="siteNav">
+    <div class="wrap site-nav-inner">
+      <a class="brand" href="/" aria-label="SkillzTrack home">{{ logo(36) }}{{ wordmark() }}</a>
+      <nav class="site-links" id="siteLinks" aria-label="Main navigation">
+        <a href="/#how-it-works">How it works</a><a href="/#features">Features</a><a href="/#careers">Careers</a>
+        <div class="site-links-cta"><a class="btn btn-ghost" href="/login">Log in</a><a class="btn btn-primary" href="/register">Get started</a></div>
+      </nav>
+      <div class="site-nav-actions">
+        <button class="icon-btn" type="button" data-theme-toggle aria-label="Switch colour theme"><span class="theme-sun">{{ icon("sun") }}</span><span class="theme-moon">{{ icon("moon") }}</span></button>
+        <a class="btn btn-ghost hide-mobile" href="/login">Log in</a><a class="btn btn-primary hide-mobile" href="/register">Get started</a>
+        <button class="icon-btn only-mobile" type="button" data-site-menu aria-controls="siteLinks" aria-expanded="false" aria-label="Open menu">{{ icon("menu") }}</button>
+      </div>
+    </div>
+  </header>
+{% endif %}
+
+  <main id="main" class="{{ 'page' if user else 'public-main' }}" tabindex="-1">{% block content %}{% endblock %}</main>
+
+{% if user %}
+    </div>{# .main-col #}
+  </div>{# .shell #}
+{% else %}
+  <footer class="site-footer">
+    <div class="wrap footer-inner">
+      <div><a class="brand" href="/" aria-label="SkillzTrack home">{{ logo(32) }}{{ wordmark() }}</a><p>Prove your skills. Close your gaps. Land your career.</p></div>
+      <nav aria-label="Footer"><a href="/#how-it-works">How it works</a><a href="/#features">Features</a><a href="/#careers">Careers</a><a href="/login">Log in</a><a href="/register">Sign up</a></nav>
+    </div>
+    <div class="wrap footer-base"><span>&copy; {{ YEAR }} SkillzTrack</span><span>Transparent, evidence-based career planning for students.</span></div>
+  </footer>
+{% endif %}
+
+  {% if flash %}
+  <div class="toasts" role="status" aria-live="polite">
+    <div class="toast toast-{{ flash.category }}" data-toast>
+      <span class="toast-icon">{{ icon({"success": "check-circle", "info": "info", "warning": "alert", "danger": "alert"}[flash.category]) }}</span>
+      <p>{{ flash.message }}</p>
+      <button type="button" class="toast-close" data-toast-close aria-label="Dismiss message">{{ icon("x") }}</button>
+    </div>
+  </div>
+  {% endif %}
+  <dialog class="confirm" id="confirmDialog" aria-labelledby="confirmText"><form method="dialog"><p id="confirmText"></p><div class="confirm-actions"><button class="btn btn-ghost" value="cancel">Cancel</button><button class="btn btn-primary" value="ok" autofocus>Confirm</button></div></form></dialog>
+
+  {% block scripts %}{% endblock %}
+  <script src="/static/js/main.js" defer></script>
+</body>
+</html>

@@ -1,0 +1,10 @@
+{% extends "base.html" %}{% from "partials/_macros.html" import icon %}
+{% block title %}{{ title }} | SkillzTrack{% endblock %}
+{% block content %}
+<section class="error-page"><div class="wrap center">
+  <p class="error-code">{{ code }}</p>
+  <h1>{{ title }}</h1>
+  <p class="muted" style="max-width:36ch;margin:0 auto 1.5rem">{{ message }}</p>
+  <a class="btn btn-primary btn-lg" href="{% if user %}/dashboard{% else %}/{% endif %}">{{ icon("arrow-left") }} Back to {% if user %}dashboard{% else %}home{% endif %}</a>
+</div></section>
+{% endblock %}

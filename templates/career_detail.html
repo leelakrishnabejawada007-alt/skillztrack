@@ -1,0 +1,42 @@
+{% extends "base.html" %}{% from "partials/_macros.html" import icon, ring, pips, progress with context %}
+{% block title %}{{ career.title }} | SkillzTrack{% endblock %}
+{% block content %}
+<div class="{{ '' if user else 'wrap public-pad' }}">
+  <ol class="crumbs" aria-label="Breadcrumb"><li><a href="/#careers">Careers</a></li><li aria-current="page">{{ career.title }}</li></ol>
+  <header class="flex gap-2 items-center mb-2" data-reveal><span class="icon-tile solid" style="width:3.8rem;height:3.8rem;font-size:1.8rem;border-radius:18px">{{ icon(career.icon) }}</span><h1 class="mb-0">{{ career.title }}</h1></header>
+  <p class="lead">{{ career.description }}</p>
+
+  <div class="grid g-main-r mt-2">
+    <section class="card" data-reveal aria-labelledby="cd1">
+      <div class="card-head"><h2 id="cd1">{{ icon("target") }} Skill profile this career needs</h2></div>
+      {% set series = [{"name": "Level required", "values": requirements|map(attribute="required_level")|list, "color": "#f59e0b"}] %}
+      {% if mine and mine.levels %}{% set series = [{"name": "Level required", "values": requirements|map(attribute="required_level")|list, "color": "#f59e0b", "fill": false, "dashed": true}, {"name": "Your verified level", "values": mine.level_list, "color": "#6366f1"}] %}{% endif %}
+      {% set cfg = {"type": "radar", "max": 5, "title": "Levels required for " ~ career.title, "labels": requirements|map(attribute="name")|list, "series": series} %}
+      <div data-chart='{{ cfg|tojson }}'></div>
+    </section>
+    <section class="card" data-reveal>
+      {% if mine and mine.match %}
+      <p class="eyebrow">Your match</p>{{ ring(mine.match.readiness, "Your readiness for " ~ career.title, 150, "ready") }}
+      <p class="small muted mt-1">Based on your <em>verified</em> skills: {{ mine.match.met }} of {{ mine.match.total }} requirements met.</p>
+      {% elif user %}<p class="eyebrow">Your match</p><p class="muted">Complete an assignment to see how ready you already are for this career.</p>
+      {% else %}<p class="eyebrow">Start this path</p><p class="muted">Create a free account to verify your skills against this career and get a personalised roadmap.</p>{% endif %}
+      <div class="mt-2">
+      {% if user %}<form method="post" action="/career"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="career_id" value="{{ career.id }}">
+        <button class="btn btn-primary btn-lg btn-block" type="submit">{{ icon("compass") }} Make this my target career</button></form>
+      {% else %}<a class="btn btn-primary btn-lg btn-block" href="/register">Sign up to start this path {{ icon("arrow-right") }}</a>{% endif %}</div>
+    </section>
+  </div>
+
+  <section class="card mt-3" data-reveal aria-labelledby="cd2">
+    <div class="card-head"><h2 id="cd2">{{ icon("list") }} Required skills &amp; target levels</h2></div>
+    <div class="table-wrap"><table>
+      <thead><tr><th scope="col">Order</th><th scope="col">Skill</th><th scope="col">Target level</th>{% if mine %}<th scope="col">You</th>{% endif %}<th scope="col">Importance</th></tr></thead>
+      <tbody>{% for r in requirements %}
+        <tr><td>{{ r.sequence }}</td><td><strong>{{ r.name }}</strong><div class="small muted">{{ r.description }}</div></td>
+          <td>{{ pips(0, r.required_level) }} <span class="small muted nowrap">{{ r.required_level }}/5 ({{ LEVEL_LABELS[r.required_level] }})</span></td>
+          {% if mine %}<td>{% set lv = mine.levels.get(r.skill_id) %}{% if lv is not none %}<span class="chip {{ 'chip-success' if lv >= r.required_level else 'chip-warn' }}">Level {{ lv }}</span>{% else %}<span class="chip">Unverified</span>{% endif %}</td>{% endif %}
+          <td><span class="chip">{{ importance_labels[r.importance]|capitalize }}</span></td></tr>
+      {% endfor %}</tbody></table></div>
+  </section>
+</div>
+{% endblock %}

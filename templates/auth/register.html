@@ -1,0 +1,37 @@
+{% extends "base.html" %}{% from "partials/_macros.html" import csrf, field_error, icon with context %}
+{% block title %}Sign up | SkillzTrack{% endblock %}
+{% block content %}
+<section class="auth">
+  <aside class="auth-aside" aria-hidden="true">
+    <h2>Know exactly where you stand.</h2>
+    <p>Create your free account and take the first step toward a career-ready skill set.</p>
+    <ul class="auth-points">
+      <li><span class="icon-tile">{{ icon("compass") }}</span><div><strong>Choose a career</strong><span>Each path lists the skills and levels it requires.</span></div></li>
+      <li><span class="icon-tile">{{ icon("clipboard") }}</span><div><strong>Prove your level</strong><span>Short graded assignments verify what you can actually do.</span></div></li>
+      <li><span class="icon-tile">{{ icon("target") }}</span><div><strong>Close the gap</strong><span>Get a prioritised roadmap, with a reason for every step.</span></div></li>
+    </ul>
+  </aside>
+  <div class="auth-main"><div class="auth-box">
+    <h1>Create your account</h1><p class="muted">It takes under a minute. Free for students.</p>
+    <form method="post" action="/register" novalidate data-validate>
+      {{ csrf() }}
+      <div class="field"><label for="full_name">Full name</label>
+        <input class="{{ 'is-invalid' if errors.full_name }}" id="full_name" name="full_name" value="{{ values.full_name }}" autocomplete="name" maxlength="60" data-rule="required" required>{{ field_error(errors.full_name) }}</div>
+      <div class="field"><label for="username">Username</label>
+        <input class="{{ 'is-invalid' if errors.username }}" id="username" name="username" value="{{ values.username }}" autocomplete="username" maxlength="30" data-rule="required|username" required>{{ field_error(errors.username) }}</div>
+      <div class="field"><label for="email">Email</label>
+        <input class="{{ 'is-invalid' if errors.email }}" type="email" id="email" name="email" value="{{ values.email }}" autocomplete="email" data-rule="required|email" required>{{ field_error(errors.email) }}</div>
+      <div class="field"><label for="password">Password</label>
+        <div class="input-wrap"><input class="has-reveal {{ 'is-invalid' if errors.password }}" type="password" id="password" name="password" autocomplete="new-password" aria-describedby="pwhelp" data-rule="required|password" required>
+          <button class="reveal" type="button" data-reveal-pw="password" aria-label="Show password" aria-pressed="false">{{ icon("eye") }}</button></div>
+        {{ field_error(errors.password) }}
+        <div class="meter" data-meter-for="password" data-score="0" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+        <p id="pwhelp" class="field-hint">At least 8 characters, not only numbers. <strong data-meter-label></strong></p></div>
+      <div class="field"><label for="password2">Confirm password</label>
+        <input class="{{ 'is-invalid' if errors.password2 }}" type="password" id="password2" name="password2" autocomplete="new-password" data-rule="required|match:#password" required>{{ field_error(errors.password2) }}</div>
+      <button class="btn btn-primary btn-lg btn-block" type="submit" data-loading-text="Creating account...">Create account</button>
+    </form>
+    <p class="auth-alt">Already registered? <a href="/login">Log in</a></p>
+  </div></div>
+</section>
+{% endblock %}

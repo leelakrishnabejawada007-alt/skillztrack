@@ -1,0 +1,87 @@
+{# SkillzTrack UI macros. Icons come from the inline sprite in base.html (no external icon font). #}
+{% macro csrf() %}<input type="hidden" name="csrf_token" value="{{ csrf_token }}">{% endmacro %}
+
+{# icon("compass"). Legacy Bootstrap-icon names stored in the database (bi-cloud ...) are mapped to the sprite. #}
+{% set ICON_ALIASES = {"bi-compass": "compass", "bi-bar-chart-line": "chart", "bi-cloud": "cloud", "bi-cpu": "cpu",
+  "bi-filetype-py": "code", "bi-globe2": "globe", "bi-shield-lock": "shield", "bi-ui-checks": "checklist", "bi-code-slash": "code",
+  "bi-bug": "bug", "bi-shield-check": "shield-check", "bi-database": "database", "bi-terminal": "terminal", "bi-kanban": "kanban"} %}
+{% macro icon(name, cls="") %}{% set n = (ICON_ALIASES.get(name) or (name[3:] if name.startswith("bi-") else name)) %}<svg class="i {{ cls }}" aria-hidden="true" focusable="false"><use href="#i-{{ n }}"/></svg>{% endmacro %}
+
+{% macro logo(size=34) %}<svg class="logo-mark" width="{{ size }}" height="{{ size }}" viewBox="0 0 40 40" aria-hidden="true" focusable="false"><defs><linearGradient id="lg{{ size }}" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#6366f1"/><stop offset=".55" stop-color="#8b5cf6"/><stop offset="1" stop-color="#06b6d4"/></linearGradient></defs><rect width="40" height="40" rx="11" fill="url(#lg{{ size }})"/><path d="M9.5 27.5l7-7 5 4.5 9-10.5" fill="none" stroke="#fff" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="30.5" cy="14.5" r="3" fill="#fff"/></svg>{% endmacro %}
+
+{% macro wordmark() %}<span class="wordmark">Skillz<span>Track</span></span>{% endmacro %}
+
+{% macro avatar(u, cls="") %}<span class="avatar {{ cls }}" aria-hidden="true">{{ ((u.full_name or u.username).split()|map("first")|list)[:2]|join|upper }}</span>{% endmacro %}
+
+{# circular gauge, percent 0-100. Animated by CSS; the number is real text, so it works without JS. #}
+{% macro ring(percent, label, size=132, sub="", tone="brand") %}
+<figure class="ring ring-{{ tone }}" style="--size: {{ size }}px" role="img" aria-label="{{ label }}: {{ percent|round|int }} percent">
+  <svg viewBox="0 0 120 120" aria-hidden="true"><circle class="ring-track" cx="60" cy="60" r="52" pathLength="100"/><circle class="ring-fill" cx="60" cy="60" r="52" pathLength="100" style="--p: {{ [percent, 100]|min|round(1) }}"/></svg>
+  <figcaption><strong data-count="{{ percent|round|int }}">{{ percent|round|int }}</strong><small>%</small>{% if sub %}<span>{{ sub }}</span>{% endif %}</figcaption>
+</figure>
+{% endmacro %}
+
+{% macro progress(value, label, cls="") %}
+<div class="bar {{ cls }}" role="progressbar" aria-label="{{ label }}" aria-valuenow="{{ value }}" aria-valuemin="0" aria-valuemax="100"><span style="width: {{ value }}%"></span></div>
+{% endmacro %}
+
+{# five-segment skill level indicator: filled up to `level`, a marker on the segment the career requires #}
+{% macro pips(level, required=None, score=None) %}
+<span class="pips" role="img" aria-label="Level {{ level }} of 5{% if required %}, target level {{ required }}{% endif %}">{% for n in range(1, 6) %}<i class="{% if n <= level %}on{% elif score is not none and n == level + 1 and score > level %}part{% endif %}{% if required and n == required %} req{% endif %}"{% if score is not none and n == level + 1 and score > level %} style="--f: {{ ((score - level) * 100)|round|int }}%"{% endif %}></i>{% endfor %}</span>
+{% endmacro %}
+
+{% macro status_badge(status) %}
+{% if status == "completed" %}<span class="chip chip-success">{{ icon("check") }} Completed</span>
+{% elif status == "in_progress" %}<span class="chip chip-brand">In progress</span>
+{% else %}<span class="chip">Not started</span>{% endif %}
+{% endmacro %}
+
+{% macro field_error(msg, id="") %}{% if msg %}<p class="field-error" {% if id %}id="{{ id }}"{% endif %} role="alert">{{ icon("alert") }}{{ msg }}</p>{% endif %}{% endmacro %}
+
+{% macro confidence_badge(c) %}
+{% if c == "high" %}<span class="chip chip-success" title="3+ assignments including auto-tested work">High confidence</span>
+{% elif c == "medium" %}<span class="chip chip-info" title="2 assignments">Medium confidence</span>
+{% elif c == "low" %}<span class="chip chip-warn" title="Only one assignment so far">Low confidence</span>
+{% else %}<span class="chip">Not verified</span>{% endif %}
+{% endmacro %}
+
+{% macro score_bar(score, label, cls="") %}
+{{ progress(((score / 5) * 100)|round|int, label ~ ": " ~ ("%.1f"|format(score)) ~ " out of 5", cls) }}
+{% endmacro %}
+
+{% macro calibration_note(p) %}
+{% if p.verified and p.claimed is not none %}
+  {% if p.calibration == "overconfident" %}<span class="chip chip-warn">{{ icon("alert") }} You rated yourself {{ p.claimed }}, evidence shows {{ p.level }}</span>
+  {% elif p.calibration == "underconfident" %}<span class="chip chip-info">{{ icon("sparkles") }} You rated yourself {{ p.claimed }}, evidence shows {{ p.level }}: better than you think</span>
+  {% else %}<span class="chip">Self-rating {{ p.claimed }} matches the evidence</span>{% endif %}
+{% elif p.claimed is not none %}<span class="chip">You claim level {{ p.claimed }} (unverified)</span>{% endif %}
+{% endmacro %}
+
+{% macro difficulty_chip(ceiling) %}
+{% set names = {1: "Beginner", 2: "Easy", 3: "Intermediate", 4: "Advanced", 5: "Expert"} %}
+<span class="chip {{ 'chip-success' if ceiling <= 2 else ('chip-info' if ceiling == 3 else 'chip-violet') }}">{{ names[ceiling] }}</span>
+{% endmacro %}
+
+{# friendly empty state: icon, one sentence, one clear action #}
+{% macro empty(icon_name, title, text, href="", cta="") %}
+<div class="empty">
+  <span class="empty-art" aria-hidden="true">{{ icon(icon_name) }}</span>
+  <h2>{{ title }}</h2>
+  <p>{{ text }}</p>
+  {% if href %}<a class="btn btn-primary" href="{{ href }}">{{ cta }} {{ icon("arrow-right") }}</a>{% endif %}
+</div>
+{% endmacro %}
+
+{% macro badge_tile(b, show_progress=true) %}
+<article class="badge-tile {{ 'is-earned' if b.earned else 'is-locked' }}" aria-label="{{ b.name }}{{ ' (earned)' if b.earned else ' (locked)' }}">
+  <span class="badge-art">{{ icon(b.icon if b.earned else "lock") }}</span>
+  <h3>{{ b.name }}</h3>
+  <p>{{ b.description }}</p>
+  {% if b.earned %}<span class="badge-date">Earned{% if b.earned_at %} {{ b.earned_at[:10] }}{% endif %}</span>
+  {% elif show_progress %}{{ progress(b.percent, b.name ~ " progress") }}<span class="badge-date">{{ b.value|round|int }} / {{ b.target }}</span>{% endif %}
+</article>
+{% endmacro %}
+
+{% macro page_head(eyebrow, title, lead="") %}
+<header class="page-head"><div><p class="eyebrow">{{ eyebrow }}</p><h1>{{ title }}</h1>{% if lead %}<p class="lead">{{ lead }}</p>{% endif %}</div><div class="page-actions">{{ caller() if caller else "" }}</div></header>
+{% endmacro %}

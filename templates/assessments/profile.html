@@ -1,0 +1,64 @@
+{% extends "base.html" %}{% from "partials/_macros.html" import icon, progress, pips, confidence_badge, score_bar, calibration_note, page_head, empty with context %}
+{% block title %}My verified skill profile | SkillzTrack{% endblock %}
+{% block content %}
+{% call page_head("Skill profile", "My verified skill profile", "Scores come only from graded assignments. Your self-ratings are shown for comparison, never as evidence.") %}
+  <a class="btn btn-primary" href="/assignments">{{ icon("clipboard") }} Take an assessment</a><a class="btn" href="/gaps">{{ icon("target") }} Skill gaps</a>
+{% endcall %}
+
+{% if rows %}
+<div class="grid g-main-r">
+  <section class="card" data-reveal aria-labelledby="pr1">
+    <div class="card-head"><h2 id="pr1">{{ icon("layers") }} Verified vs required</h2>{% if career %}<span class="chip chip-brand">{{ career.title }}</span>{% endif %}</div>
+    {% set cfg = {"type": "radar", "max": 5, "title": "Verified score, self-rating and required level per skill", "labels": chart.labels,
+      "series": [{"name": "Verified score", "values": chart.verified, "color": "#6366f1"}, {"name": "Your self-rating", "values": chart.claimed, "color": "#94a3b8", "dashed": true, "fill": false}, {"name": "Required", "values": chart.required, "color": "#f59e0b", "dashed": true, "fill": false}]} %}
+    <div data-chart='{{ cfg|tojson }}'></div>
+  </section>
+
+  <section class="card" data-reveal aria-labelledby="pr2">
+    <div class="card-head"><h2 id="pr2">{{ icon("compass") }} Career match</h2></div>
+    {% if match %}
+    <p class="small muted">How ready your <em>verified</em> skills already make you for each career:</p>
+    {% for m in match %}
+    <div class="match-row"><span class="icon-tile">{{ icon(m.icon) }}</span>
+      <span><a href="/careers/{{ m.slug }}"><strong>{{ m.title }}</strong></a>{% if m.is_target %} <span class="chip chip-brand">Target</span>{% endif %}
+        {{ progress(m.readiness, m.title ~ " match", "thin") }}<span class="xs muted">{{ m.met }} of {{ m.total }} requirements met</span></span><b>{{ m.readiness|round|int }}%</b></div>
+    {% endfor %}
+    {% else %}<p class="muted mb-0">Complete an assignment to see how your skills fit each career.</p>{% endif %}
+  </section>
+</div>
+
+<section class="card mt-3" data-reveal aria-labelledby="pr3">
+  <div class="card-head"><h2 id="pr3">{{ icon("list") }} Skill details</h2></div>
+  <div class="table-wrap"><table>
+    <thead><tr><th scope="col">Skill</th><th scope="col">Verified</th><th scope="col">Level</th><th scope="col">Confidence</th><th scope="col">Weak topics</th><th scope="col">Next step</th></tr></thead><tbody>
+    {% for r in rows %}<tr>
+      <td><strong>{{ r.req.name }}</strong><div>{{ calibration_note(r.p) }}</div></td>
+      <td>{% if r.p.verified %}<b>{{ "%.1f"|format(r.p.score) }}</b>/5{% else %}<span class="chip">Not verified</span>{% endif %}</td>
+      <td>{{ pips(r.p.level, r.req.required_level, r.p.score) }}</td>
+      <td>{{ confidence_badge(r.p.confidence) }}</td>
+      <td class="small">{% if r.p.weak %}{{ r.p.weak[:3]|map(attribute="topic")|join(", ") }}{% else %}<span class="muted">-</span>{% endif %}</td>
+      <td>{% if r.p.next %}<a href="/assignments/{{ r.p.next.slug }}">{{ r.p.next.title }}</a>{% elif r.p.level >= r.req.required_level %}<span class="text-success">{{ icon("check") }} Requirement met</span>{% else %}<a href="/assignments#skill-{{ r.req.skill_id }}">View assignments</a>{% endif %}</td>
+    </tr>{% endfor %}</tbody></table></div>
+</section>
+{% else %}
+<div class="alert alert-info">{{ icon("info") }}<p>Choose a target career on your <a href="/dashboard">dashboard</a> to compare your verified skills with what it needs.</p></div>
+{% if match %}<section class="card"><h2>{{ icon("compass") }} Career match</h2>{% for m in match %}<div class="match-row"><span class="icon-tile">{{ icon(m.icon) }}</span><span><strong>{{ m.title }}</strong>{{ progress(m.readiness, m.title ~ " match", "thin") }}</span><b>{{ m.readiness|round|int }}%</b></div>{% endfor %}</section>{% endif %}
+{% endif %}
+
+{% if other_rows %}<section class="card mt-3"><div class="card-head"><h2>{{ icon("layers") }} Other verified skills</h2></div>
+  {% for r in other_rows %}<div class="lever"><span>{{ r.name }}</span><span><b>{{ "%.1f"|format(r.p.score) }}</b>/5 {{ confidence_badge(r.p.confidence) }}</span></div>{% endfor %}</section>{% endif %}
+
+<div class="grid g-2 mt-3">
+  <section class="card" data-reveal aria-labelledby="pr4"><div class="card-head"><h2 id="pr4">{{ icon("trending") }} Score history</h2></div>
+    {% if history %}
+      <div data-chart='{{ history_chart|tojson }}'></div>
+      <div class="table-wrap mt-2"><table><tbody>
+      {% for h in history[:6] %}<tr><td>{{ h.skill_name }}</td><td><b>{{ "%.1f"|format(h.score) }}</b>/5</td><td class="small muted">{{ h.created_at }}</td></tr>{% endfor %}</tbody></table></div>
+    {% else %}<p class="muted mb-0">Your score changes will appear here after your first graded assignment.</p>{% endif %}
+  </section>
+  <section class="card" data-reveal aria-labelledby="pr5"><div class="card-head"><h2 id="pr5">{{ icon("clock") }} Recent attempts</h2></div>
+    {% if recent %}{% for r in recent %}<div class="lever"><a href="/attempts/{{ r.id }}">{{ r.title }}</a><b style="color:var(--text)">{{ (r.pct * 100)|round|int }}%</b></div>{% endfor %}
+    {% else %}<p class="muted mb-0">No graded attempts yet.</p>{% endif %}
+  </section>
+</div>
+{% endblock %}

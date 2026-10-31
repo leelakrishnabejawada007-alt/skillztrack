@@ -1,0 +1,12 @@
+{% extends "base.html" %}{% from "partials/_macros.html" import icon, page_head with context %}
+{% block title %}Admin | SkillzTrack{% endblock %}
+{% block content %}
+{% call page_head("Admin", "Admin panel", "Manage the careers, skills and study materials students see.") %}{% endcall %}
+{% include "admin/_nav.html" %}
+<div class="grid g-4 keep-2 mb-3">
+  {% for label, n in [("Users", counts.users), ("Careers", counts.careers), ("Skills", counts.skills), ("Roadmap materials", counts.resources), ("Roadmaps", counts.roadmaps)] %}
+  <div class="card admin-stat" data-reveal><strong>{{ n }}</strong><span>{{ label }}</span></div>{% endfor %}
+</div>
+<section class="card"><div class="card-head"><h2>{{ icon("users") }} Newest users</h2><a class="card-link" href="/admin/users">All users</a></div>
+  {% for u in recent %}<div class="lever"><span><strong>{{ u.username }}</strong> <span class="muted small">{{ u.email }}</span></span><span class="small muted">joined {{ u.created_at }}</span></div>{% else %}<p class="muted mb-0">No users yet.</p>{% endfor %}</section>
+{% endblock %}

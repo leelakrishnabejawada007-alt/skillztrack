@@ -1,0 +1,91 @@
+{% extends "base.html" %}{% from "partials/_macros.html" import csrf, icon, progress, confidence_badge, score_bar, calibration_note, difficulty_chip, page_head, empty with context %}
+{% block title %}Skill assessments | SkillzTrack{% endblock %}
+{% macro assignment_row(a, recommended=false) %}
+<div class="asg {{ 'rec' if recommended }}" data-filter-item data-kind="{{ a.kind }}" data-status="{{ a.status }}" data-text="{{ (a.title ~ ' ' ~ a.kind_label ~ ' ' ~ a.summary|default('') ~ ' ' ~ a.skill_name|default(''))|lower }}">
+  <span class="asg-icon">{{ icon(a.icon) }}</span>
+  <div class="asg-main">
+    <strong>{{ a.title }}{% if recommended %} <span class="chip chip-brand">{{ icon("sparkles") }} Recommended next</span>{% endif %}{% if a.status == "mastered" %} <span class="chip chip-success">{{ icon("check") }} Mastered</span>{% endif %}</strong>
+    <small>{{ difficulty_chip(a.ceiling) }} {{ a.kind_label }} &middot; about {{ a.minutes }} min &middot; proves up to level {{ a.ceiling }} ({{ a.level_name }}) &middot; {% if a.evidence == "executed" %}auto-tested{% elif a.evidence == "static" %}rubric-checked{% else %}multiple choice{% endif %}</small>
+  </div>
+  <div class="asg-score">{% if a.used %}<div>Best <b>{{ (a.best_pct * 100)|round|int }}%</b></div><div class="muted xs">{{ a.used }}/{{ a.used + a.attempts_left }} attempts</div>{% else %}<span class="muted xs">Not attempted</span>{% endif %}</div>
+  <a class="btn btn-sm {{ 'btn-primary' if (recommended or a.in_progress) }}" href="/assignments/{{ a.slug }}">{% if a.in_progress %}Continue{% elif a.used %}Review / retry{% else %}Open{% endif %} {{ icon("arrow-right") }}</a>
+</div>
+{% endmacro %}
+{% block content %}
+{% call page_head("Assessments", "Prove your skills", "Your level in each skill is proven by assignments: quizzes, coding challenges run against hidden tests, debugging tasks, SQL labs and rubric-checked mini-projects.") %}
+  <a class="btn" href="/skill-profile">{{ icon("layers") }} Verified profile</a>
+  {% if career %}<a class="btn btn-ghost" href="/assess">{{ icon("edit") }} Self-ratings</a>{% endif %}
+{% endcall %}
+
+{% if not code_enabled %}<div class="alert alert-warning">{{ icon("alert") }}<p>Code execution is switched off on this server, so coding, debugging and testing assignments are unavailable. Quizzes, SQL, command and rubric assignments still work.</p></div>{% endif %}
+
+<details class="card info-panel mb-3">
+  <summary>{{ icon("info") }} How your score is calculated (no self-rating involved) <span class="grow"></span>{{ icon("chevron-down") }}</summary>
+  <ul class="muted">
+    <li>Every assignment can prove up to a <strong>ceiling level</strong>: quizzes up to 3, rubric-checked work up to 4, auto-tested code up to 5.</li>
+    <li>Attempt score = ceiling &times; how much of the tests/rubric you earned. Scoring <strong>80% counts as mastery</strong> of that tier.</li>
+    <li>Your skill score (0&ndash;5) is your best assignment result. <strong>One assignment can prove at most 3.5</strong>; levels 4 and 5 need evidence from at least two assignments.</li>
+    <li>Beginner and Easy tasks allow 10 free retries with no penalty. Harder tasks allow {{ max_attempts }}; from the 3rd attempt each retry is worth 15% less, so practise first.</li>
+    <li>Confidence is low with one assignment, medium with two and high with three or more including auto-tested code.</li>
+  </ul>
+</details>
+
+<div data-filter-root>
+  <div class="toolbar">
+    <label class="search" for="asgSearch"><span class="sr-only">Search assignments</span>{{ icon("search") }}<input id="asgSearch" type="search" placeholder="Search assignments" data-filter-search autocomplete="off"></label>
+    <div class="seg" data-filter-key="status" role="group" aria-label="Filter by status">
+      <button type="button" data-value="all" aria-pressed="true">All</button><button type="button" data-value="new" aria-pressed="false">Not started</button><button type="button" data-value="in_progress" aria-pressed="false">In progress</button><button type="button" data-value="mastered" aria-pressed="false">Mastered</button>
+    </div>
+    <div class="seg" data-filter-key="kind" role="group" aria-label="Filter by type">
+      <button type="button" data-value="all" aria-pressed="true">Any type</button><button type="button" data-value="quiz" aria-pressed="false">Quiz</button><button type="button" data-value="code" aria-pressed="false">Code</button><button type="button" data-value="sql" aria-pressed="false">SQL</button><button type="button" data-value="rubric" aria-pressed="false">Project</button>
+    </div>
+    <span class="muted small" data-filter-count aria-live="polite"></span>
+  </div>
+
+  {% if career %}
+  <div class="card card-tight mb-3">
+    <div class="flex between wrap-row gap-1 mb-1"><strong>{{ career.title }}</strong><span class="muted small">{{ verified }} of {{ cards|length }} skills verified</span></div>
+    {{ progress(((verified / (cards|length or 1)) * 100)|round|int, "Skills verified", "thick") }}
+  </div>
+  {% for c in cards %}
+  <section class="card skill-block" id="skill-{{ c.req.skill_id }}" data-filter-group data-reveal>
+    <div class="skill-top">
+      <div><h2 class="mb-0">{{ c.req.name }}</h2>
+        <p class="small muted mb-1">Needed for {{ career.title }}: level {{ c.req.required_level }} ({{ LEVEL_LABELS[c.req.required_level] }})</p>{{ calibration_note(c.p) }}</div>
+      <div>
+        {% if c.p.verified %}
+        <div class="flex between wrap-row gap-1 small mb-1"><span>Verified <strong>{{ "%.1f"|format(c.p.score) }}/5</strong> &middot; level {{ c.p.level }} ({{ LEVEL_LABELS[c.p.level] }})</span>{{ confidence_badge(c.p.confidence) }}</div>
+        {{ score_bar(c.p.score, c.req.name ~ " verified score", "good" if c.p.level >= c.req.required_level else "") }}
+        {% if c.p.weak %}<p class="small mt-1 mb-0">{{ icon("target", "text-warn") }} Weak topics: {{ c.p.weak[:4]|map(attribute="topic")|join(", ") }}</p>{% endif %}
+        {% else %}<span class="chip">Not verified yet</span> <span class="small muted">Complete an assignment to get a score.</span>{% endif %}
+      </div>
+    </div>
+    {% for a in c.assignments %}{{ assignment_row(a, c.p.next and c.p.next.slug == a.slug) }}{% endfor %}
+  </section>
+  {% endfor %}
+  {% else %}
+  <div class="alert alert-info">{{ icon("info") }}<p>Choose a target career on your <a href="/dashboard">dashboard</a> to see the skills it needs. You can still practise any skill below.</p></div>
+  {% endif %}
+
+  {% if others %}
+  <h2 class="mt-4 mb-2">{{ "Other skills" if career else "All skills" }}</h2>
+  {% for o in others %}
+  <details class="card info-panel mb-1" data-filter-group>
+    <summary>{{ o.skill.name }} <span class="chip">{{ o.assignments|length }} assignments</span><span class="grow"></span>{{ icon("chevron-down") }}</summary>
+    <div style="padding:0">{% for a in o.assignments %}{{ assignment_row(a) }}{% endfor %}</div>
+  </details>
+  {% endfor %}
+  {% endif %}
+
+  <div data-filter-empty hidden>{{ empty("search", "No assignments match", "Try a different search term or clear the filters above.") }}</div>
+</div>
+
+{% if recent %}
+<section class="card mt-4" aria-labelledby="recentTitle">
+  <div class="card-head"><h2 id="recentTitle">{{ icon("clock") }} Recent attempts</h2></div>
+  <div class="table-wrap"><table><thead><tr><th>Assignment</th><th>Skill</th><th>Points</th><th>Attempt score</th><th>When</th><th></th></tr></thead><tbody>
+    {% for r in recent %}<tr><td>{{ r.title }}</td><td>{{ r.skill_name }}</td><td><b>{{ (r.pct * 100)|round|int }}%</b></td><td>{{ "%.1f"|format(r.skill_score) }}/5</td><td class="small muted">{{ r.graded_at }}</td><td><a href="/attempts/{{ r.id }}">View</a></td></tr>{% endfor %}
+  </tbody></table></div>
+</section>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,20 @@
+{% extends "base.html" %}{% from "partials/_macros.html" import icon, csrf, empty, page_head with context %}
+{% block title %}Notifications | SkillzTrack{% endblock %}
+{% block content %}
+<div style="max-width:860px">
+{% call page_head("Notifications", "What's new", "Badges, level-ups and milestones appear here as they happen.") %}
+  {% if items %}<form method="post" action="/notifications/clear" data-confirm="Clear all notifications? This cannot be undone.">{{ csrf() }}<button class="btn btn-sm btn-danger" type="submit">{{ icon("trash") }} Clear all</button></form>{% endif %}
+{% endcall %}
+{% if items %}
+<section class="card" style="padding:0;overflow:hidden" aria-label="Notifications">
+  {% for n in items %}
+  <article class="notice {{ 'unread' if not n.is_read }}">
+    <span class="dot k-{{ n.kind }}">{{ icon({"badge": "award", "level": "trending", "milestone": "milestone", "roadmap": "route"}.get(n.kind, "bell")) }}</span>
+    <div class="grow"><h3>{% if n.link %}<a href="{{ n.link }}" style="color:inherit">{{ n.title }}</a>{% else %}{{ n.title }}{% endif %}{% if not n.is_read %} <span class="chip chip-brand">New</span>{% endif %}</h3>{% if n.body %}<p>{{ n.body }}</p>{% endif %}</div>
+    <time datetime="{{ n.created_at }}">{{ n.created_at[:16] }} UTC</time>
+  </article>
+  {% endfor %}
+</section>
+{% else %}{{ empty("bell", "You're all caught up", "New badges, level-ups and completed milestones will show up here.", "/assignments", "Take an assignment") }}{% endif %}
+</div>
+{% endblock %}

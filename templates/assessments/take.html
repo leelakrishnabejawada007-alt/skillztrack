@@ -1,0 +1,54 @@
+{% extends "base.html" %}{% from "partials/_macros.html" import csrf, icon, progress with context %}
+{% block title %}{{ at.title }} | SkillzTrack{% endblock %}
+{% block content %}
+<div style="max-width:1000px">
+  <ol class="crumbs" aria-label="Breadcrumb"><li><a href="/assignments">Skill assessments</a></li><li><a href="/assignments/{{ at.slug }}">{{ at.title }}</a></li><li aria-current="page">Attempt</li></ol>
+  <h1>{{ at.title }}</h1>
+  <p class="muted">{{ kind_label }} &middot; {{ at.skill_name }} &middot; about {{ at.minutes }} min. Graded on the server: nothing you see here reveals the answers.</p>
+
+  <details class="card info-panel mb-3" {% if at.kind != "quiz" %}open{% endif %}><summary>{{ icon("book") }} Instructions <span class="grow"></span>{{ icon("chevron-down") }}</summary>
+    <div><div class="instr">{{ ba.instructions }}</div></div></details>
+
+  <form method="post" action="/attempts/{{ at.id }}/submit" data-confirm-submit="Submit for grading? This uses one of your attempts." data-autosave="/attempts/{{ at.id }}/draft" autocomplete="off">
+    {{ csrf() }}
+    <div class="take-bar" role="region" aria-label="Attempt status">
+      <span class="timer">{{ icon("clock") }} <span data-timer-start="{{ at.started_at }}">0:00</span></span>
+      {% if at.kind == "quiz" %}<span class="small" data-answered>0 of {{ questions|length }} answered</span><div class="bar thin" data-answered-bar role="progressbar" aria-label="Questions answered" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><span style="width:0%"></span></div>{% else %}<span class="grow"></span>{% endif %}
+      <span class="save-state" data-save-state aria-live="polite">{{ icon("save") }} Drafts save automatically</span>
+    </div>
+
+    {% if at.kind == "quiz" %}
+      {% for q in questions %}
+      <fieldset class="card q-card" data-q data-reveal>
+        <legend><span class="q-no">{{ loop.index }}</span>{{ q.q }}</legend>
+        {% if q.code %}<pre class="codeblock"><code>{{ q.code }}</code></pre>{% endif %}
+        {% for idx, text in q.options %}
+        <label class="opt" for="q{{ q.id }}-{{ idx }}"><input type="radio" name="q_{{ q.id }}" id="q{{ q.id }}-{{ idx }}" value="{{ idx }}" {% if draft.get(q.id) == idx|string %}checked{% endif %}><span>{{ text }}</span></label>
+        {% endfor %}
+      </fieldset>
+      {% endfor %}
+    {% elif at.kind == "sql" %}
+      <pre class="codeblock">{{ ba.instructions }}</pre>
+      {% for q in prompts %}
+      <div class="card mb-2">
+        <label for="{{ q.id }}"><strong>{{ q.id|upper }}.</strong> {{ q.label }}</label>
+        <textarea class="editor" id="{{ q.id }}" name="{{ q.id }}" rows="4" spellcheck="false" placeholder="SELECT ..." data-tab-indent style="min-height:7rem">{{ draft.get(q.id, "") }}</textarea>
+      </div>
+      {% endfor %}
+    {% elif at.kind == "commands" %}
+      {% for q in prompts %}
+      <div class="card mb-2">
+        <label for="{{ q.id }}">{{ loop.index }}. {{ q.label }}</label>
+        <input class="code-in" id="{{ q.id }}" name="{{ q.id }}" type="text" maxlength="400" spellcheck="false" autocapitalize="off" value="{{ draft.get(q.id, "") }}">
+      </div>
+      {% endfor %}
+    {% else %}
+      <label for="{{ 'text' if at.kind == 'rubric' else 'code' }}">{{ "Your submission" if at.kind == "rubric" else "Your code" }}</label>
+      <textarea class="editor" id="{{ 'text' if at.kind == 'rubric' else 'code' }}" name="{{ 'text' if at.kind == 'rubric' else 'code' }}" rows="{{ 26 if at.kind != 'rubric' else 22 }}" spellcheck="false" data-tab-indent>{{ code }}</textarea>
+      <p class="field-hint">Tab inserts indentation. Your work is saved as you type and kept if grading is rejected.</p>
+    {% endif %}
+    <div class="flex gap-2 wrap-row items-center mt-3"><button class="btn btn-primary btn-lg" type="submit" data-loading-text="Grading...">{{ icon("send") }} Submit for grading</button>
+      <a class="btn btn-ghost" href="/assignments/{{ at.slug }}">Back (attempt is kept)</a></div>
+  </form>
+</div>
+{% endblock %}

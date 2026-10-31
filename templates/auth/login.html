@@ -1,0 +1,29 @@
+{% extends "base.html" %}{% from "partials/_macros.html" import csrf, icon with context %}
+{% block title %}Log in | SkillzTrack{% endblock %}
+{% block content %}
+<section class="auth">
+  <aside class="auth-aside" aria-hidden="true">
+    <h2>Pick up where you left off.</h2>
+    <p>Your verified skills, gap analysis and roadmap are waiting.</p>
+    <ul class="auth-points">
+      <li><span class="icon-tile">{{ icon("shield-check") }}</span><div><strong>Evidence you can trust</strong><span>Levels come from graded work, never from self-ratings.</span></div></li>
+      <li><span class="icon-tile">{{ icon("route") }}</span><div><strong>A plan that adapts</strong><span>Your roadmap updates every time your skills improve.</span></div></li>
+      <li><span class="icon-tile">{{ icon("award") }}</span><div><strong>Progress that shows</strong><span>Badges, streaks and milestones track your momentum.</span></div></li>
+    </ul>
+  </aside>
+  <div class="auth-main"><div class="auth-box">
+    <h1>Welcome back</h1><p class="muted">Log in to continue your roadmap.</p>
+    {% if error %}<div class="alert alert-danger" role="alert">{{ icon("alert") }}<p>{{ error }}</p></div>{% endif %}
+    <form method="post" action="/login" novalidate data-validate>
+      {{ csrf() }}<input type="hidden" name="next" value="{{ next }}">
+      <div class="field"><label for="identifier">Username or email</label>
+        <div class="input-wrap has-icon"><span class="input-icon">{{ icon("user") }}</span><input id="identifier" name="identifier" value="{{ identifier }}" autocomplete="username" data-rule="required" required autofocus></div></div>
+      <div class="field"><label for="password">Password</label>
+        <div class="input-wrap has-icon"><span class="input-icon">{{ icon("lock") }}</span><input class="has-reveal" type="password" id="password" name="password" autocomplete="current-password" data-rule="required" required>
+          <button class="reveal" type="button" data-reveal-pw="password" aria-label="Show password" aria-pressed="false">{{ icon("eye") }}</button></div></div>
+      <button class="btn btn-primary btn-lg btn-block" type="submit" data-loading-text="Logging in...">Log in</button>
+    </form>
+    <p class="auth-alt">New to SkillzTrack? <a href="/register">Create an account</a></p>
+  </div></div>
+</section>
+{% endblock %}

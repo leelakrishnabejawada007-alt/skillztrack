@@ -1,0 +1,31 @@
+{% extends "base.html" %}{% from "partials/_macros.html" import csrf, field_error, icon, avatar, ring, page_head with context %}
+{% block title %}Profile | SkillzTrack{% endblock %}
+{% block content %}
+<div class="profile-hero" data-reveal>{{ avatar(user, "lg") }}<div><h1>{{ user.full_name or user.username }}</h1><p>@{{ user.username }} &middot; {{ user.email }}</p></div></div>
+<div class="grid g-main">
+  <section class="card" data-reveal aria-labelledby="pf1">
+    <div class="card-head"><h2 id="pf1">{{ icon("user") }} Profile &amp; career goal</h2></div>
+    <p class="small muted">Username: <strong>{{ user.username }}</strong> (cannot be changed)</p>
+    <form method="post" action="/profile" novalidate data-validate>{{ csrf() }}
+      <div class="field"><label for="full_name">Full name</label><input class="{{ 'is-invalid' if errors.full_name }}" id="full_name" name="full_name" value="{{ values.full_name }}" maxlength="60" data-rule="required" required>{{ field_error(errors.full_name) }}</div>
+      <div class="field"><label for="email">Email</label><input class="{{ 'is-invalid' if errors.email }}" type="email" id="email" name="email" value="{{ values.email }}" data-rule="required|email" required>{{ field_error(errors.email) }}</div>
+      <div class="field"><label for="target_career_id">Target career</label>
+        <select class="{{ 'is-invalid' if errors.target_career_id }}" id="target_career_id" name="target_career_id"><option value="0">Not chosen yet</option>
+          {% for c in careers %}<option value="{{ c.id }}" {% if values.target_career_id == c.id %}selected{% endif %}>{{ c.title }}</option>{% endfor %}</select>{{ field_error(errors.target_career_id) }}
+        <p class="field-hint">Changing your career starts a fresh roadmap for the new goal. Your verified skills carry over.</p></div>
+      <div class="field"><label for="hours_per_week">Default study hours per week</label><input class="{{ 'is-invalid' if errors.hours_per_week }}" type="number" min="2" max="40" id="hours_per_week" name="hours_per_week" value="{{ values.hours_per_week }}" data-rule="required|hours" required>{{ field_error(errors.hours_per_week) }}</div>
+      <button class="btn btn-primary" type="submit" data-loading-text="Saving...">{{ icon("save") }} Save changes</button>
+    </form>
+  </section>
+  <section class="card" data-reveal aria-labelledby="pf2">
+    <div class="card-head"><h2 id="pf2">{{ icon("key") }} Change password</h2></div>
+    <form method="post" action="/profile/password" novalidate data-validate>{{ csrf() }}
+      <div class="field"><label for="current_password">Current password</label><input type="password" id="current_password" name="current_password" autocomplete="current-password" data-rule="required" required></div>
+      <div class="field"><label for="new_password">New password</label><input type="password" id="new_password" name="new_password" autocomplete="new-password" data-rule="required|password" required>
+        <div class="meter" data-meter-for="new_password" data-score="0" aria-hidden="true"><i></i><i></i><i></i><i></i></div><p class="field-hint">At least 8 characters. <strong data-meter-label></strong></p></div>
+      <div class="field"><label for="new_password2">Confirm new password</label><input type="password" id="new_password2" name="new_password2" autocomplete="new-password" data-rule="required|match:#new_password" required></div>
+      <button class="btn" type="submit" data-loading-text="Updating...">Update password</button>
+    </form>
+  </section>
+</div>
+{% endblock %}

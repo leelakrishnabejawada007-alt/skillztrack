@@ -1,0 +1,61 @@
+{% extends "base.html" %}{% from "partials/_macros.html" import icon, ring, confidence_badge, score_bar, calibration_note with context %}
+{% block title %}Result: {{ at.title }} | SkillzTrack{% endblock %}
+{% block content %}
+{% set won = at.pct >= mastery %}
+<div style="max-width:1000px">
+  <ol class="crumbs" aria-label="Breadcrumb"><li><a href="/assignments">Skill assessments</a></li><li><a href="/assignments/{{ at.slug }}">{{ at.title }}</a></li><li aria-current="page">Result</li></ol>
+  <h1>{{ at.title }}: result</h1>
+  {% if not won %}<div class="alert alert-info">{{ icon("lightbulb") }}<p>Mistakes are part of learning. Read the hints below, fix what you can, and retry{% if left > 0 %}: you have {{ left }} attempt{{ 's' if left != 1 }} left{% endif %}.</p></div>
+  {% else %}<div class="alert alert-success">{{ icon("trophy") }}<p>Great work! You mastered this task. Try the next, slightly harder one.</p></div>{% endif %}
+  <p class="muted small">{{ kind_label }} &middot; attempt {{ at.attempt_no }} &middot; {{ at.graded_at }}{% if at.duration_seconds is not none %} &middot; took {{ (at.duration_seconds / 60)|round(1) }} min{% endif %}</p>
+
+  <div class="grid g-3 mb-3">
+    <div class="card center" data-reveal>{{ ring((at.pct * 100), "Points earned", 150, "points", "good" if won else "brand") }}<p class="muted small mt-1 mb-0">{{ at.points|round(1) }} of {{ at.possible|round(1) }} points</p></div>
+    <div class="card center" data-reveal><p class="eyebrow">This attempt</p><div class="score-big">{{ "%.1f"|format(at.skill_score) }}<small>/5</small></div><p class="muted small mt-1 mb-0">on the skill scale</p>
+      <p class="small muted mt-1 mb-0">ceiling {{ at.ceiling }} &times; mastery {{ [100, ((at.pct / mastery) * 100)|round|int]|min }}%{% if at.attempt_no > retake_free %} &times; retake factor{% endif %}</p></div>
+    <div class="card" data-reveal>
+      <p class="eyebrow">Verified skill</p>
+      <strong>{{ at.skill_name }}: {{ "%.1f"|format(p.score) }}/5</strong> <span class="muted small">(level {{ p.level }}, {{ LEVEL_LABELS[p.level] }})</span>
+      <div class="mt-1">{{ score_bar(p.score, at.skill_name ~ " verified score") }}</div>
+      <div class="mt-1">{{ confidence_badge(p.confidence) }}</div>
+      {% if prev %}<p class="small mt-1 mb-0">Before: {{ "%.1f"|format(prev.score) }}/5{% if p.score > prev.score %} <span class="text-success">&uarr; improved</span>{% else %} (your best attempt still counts){% endif %}</p>{% else %}<p class="small muted mt-1 mb-0">First evidence for this skill.</p>{% endif %}
+      {% if p.capped %}<p class="small text-warn mt-1 mb-0">One assignment proves at most 3.5. Pass a second assignment to unlock levels 4 and 5.</p>{% endif %}
+      {% if p.contradictory %}<p class="small text-warn mt-1 mb-0">Your results on easier and harder tasks disagree, so confidence is lowered.</p>{% endif %}
+      <div class="mt-1">{{ calibration_note(p) }}</div>
+    </div>
+  </div>
+
+  <div class="grid g-2 mb-3">
+    <section class="card"><h2>{{ icon("target", "text-warn") }} Topics to work on</h2>
+      {% if weak %}<ul class="mb-0">{% for t in weak %}<li>{{ t.topic }} <span class="muted">({{ (t.pct * 100)|round|int }}%)</span></li>{% endfor %}</ul>
+      {% else %}<p class="muted mb-0">No weak topics in this attempt. Nice work.</p>{% endif %}</section>
+    <section class="card"><h2>{{ icon("check-circle", "text-success") }} Strong topics</h2>
+      {% if strong %}<ul class="mb-0">{% for t in strong %}<li>{{ t.topic }} <span class="muted">({{ (t.pct * 100)|round|int }}%)</span></li>{% endfor %}</ul>
+      {% else %}<p class="muted mb-0">None above {{ (mastery * 100)|round|int }}% yet.</p>{% endif %}</section>
+  </div>
+
+  <section class="card mb-3">
+    <h2>Evidence: what was checked</h2>
+    <div>
+      {% for i in items %}
+      <div class="check-row">
+        <span class="st {{ 'st-pass' if i.passed else ('st-part' if i.earned > 0 else 'st-fail') }}" role="img" aria-label="{{ 'Passed' if i.passed else ('Partly' if i.earned > 0 else 'Failed') }}">{{ icon("check-circle" if i.passed else ("alert" if i.earned > 0 else "x")) }}</span>
+        <div><div>{{ i.label }}</div><small class="muted">{{ i.topic }}</small>
+          {% if not i.passed %}<small>{{ i.feedback }}</small>{% endif %}
+          {% if i.explain and (i.passed or show_explain) %}<small class="mt-1">{{ icon("lightbulb", "text-warn") }} {{ i.explain }}</small>{% elif i.explain %}<small class="mt-1">{{ icon("lock") }} Full explanation unlocks after your next attempt. Use the hint and try again.</small>{% endif %}
+          {% if i.detail %}<div class="codeblock mt-1" style="font-size:.8rem">input: {{ i.detail.input }}{% if i.detail.expected %}<br>expected: {{ i.detail.expected }}<br>got: {{ i.detail.got }}{% endif %}</div>{% endif %}</div>
+        <span class="nowrap small"><b>{{ i.earned|round(1) }}</b> / {{ i.possible|round(1) }}</span></div>
+      {% endfor %}
+    </div>
+    {% if at.kind != "quiz" %}<p class="pagehint mt-2 mb-0">{{ icon("info") }} Hidden tests only show their input and expected output when they are marked as examples; for the others you get the topic and a hint, so work from the requirements.</p>{% endif %}
+  </section>
+
+  <div class="flex wrap-row gap-1">
+    {% if left > 0 %}<a class="btn" href="/assignments/{{ at.slug }}">{{ icon("refresh") }} Retry ({{ left }} left{% if next_factor < 1 %}, worth {{ (next_factor * 100)|round|int }}%{% endif %})</a>{% endif %}
+    {% if p.next and p.next.slug != at.slug %}<a class="btn btn-primary" href="/assignments/{{ p.next.slug }}">Next: {{ p.next.title }} {{ icon("arrow-right") }}</a>{% endif %}
+    <a class="btn" href="/gaps">{{ icon("target") }} My skill gaps</a>
+    <a class="btn" href="/roadmap">{{ icon("route") }} My roadmap</a>
+    <a class="btn btn-ghost" href="/assignments">All assessments</a>
+  </div>
+</div>
+{% endblock %}

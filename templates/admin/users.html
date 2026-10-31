@@ -1,0 +1,19 @@
+{% extends "base.html" %}{% from "partials/_macros.html" import csrf, icon, page_head with context %}
+{% block title %}Users | Admin{% endblock %}
+{% block content %}
+{% call page_head("Admin", "Admin panel") %}{% endcall %}
+{% include "admin/_nav.html" %}
+<div data-filter-root>
+  <div class="toolbar"><label class="search" for="uSearch"><span class="sr-only">Search users</span>{{ icon("search") }}<input id="uSearch" type="search" placeholder="Search by name, username, email or career" data-filter-search autocomplete="off"></label><span class="muted small" data-filter-count aria-live="polite"></span></div>
+  <section class="card"><div class="table-wrap"><table>
+    <thead><tr><th>User</th><th>Email</th><th>Target career</th><th>Milestones done</th><th>Role</th><th style="text-align:right">Actions</th></tr></thead>
+    <tbody>{% for u in users %}
+      <tr data-filter-item data-text="{{ (u.username ~ ' ' ~ u.full_name ~ ' ' ~ u.email ~ ' ' ~ (u.career or ''))|lower }}"><td><strong>{{ u.username }}</strong><div class="small muted">{{ u.full_name }}</div></td><td>{{ u.email }}</td><td>{{ u.career or "-" }}</td><td>{{ u.done }}</td>
+        <td>{% if u.is_admin %}<span class="chip chip-brand">Admin</span>{% else %}<span class="chip">Student</span>{% endif %}</td>
+        <td style="text-align:right" class="nowrap">{% if u.id != user.id %}
+          <form class="inline-form" method="post" action="/admin/users/{{ u.id }}/toggle-admin">{{ csrf() }}<button class="btn btn-sm" type="submit">{{ "Remove admin" if u.is_admin else "Make admin" }}</button></form>
+          <form class="inline-form" method="post" action="/admin/users/{{ u.id }}/delete" data-confirm="Delete {{ u.username }} and all their data?">{{ csrf() }}<button class="btn btn-sm btn-danger" type="submit">Delete</button></form>
+        {% else %}<span class="small muted">You</span>{% endif %}</td></tr>
+    {% endfor %}</tbody></table></div></section>
+</div>
+{% endblock %}

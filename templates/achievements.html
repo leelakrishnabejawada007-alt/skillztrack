@@ -1,0 +1,34 @@
+{% extends "base.html" %}{% from "partials/_macros.html" import icon, progress, badge_tile, page_head with context %}
+{% block title %}Achievements | SkillzTrack{% endblock %}
+{% block content %}
+{% call page_head("Achievements", "Badges & progress", "Every badge is earned from real evidence in your account: graded results, verified levels, completed milestones and study streaks.") %}{% endcall %}
+
+<section class="card card-grad xp-card" data-reveal aria-label="Learner level">
+  <span class="xp-level" aria-hidden="true">{{ game.xp.level }}</span>
+  <div class="grow" style="min-width:14rem">
+    <h2 style="color:#fff;margin:0">Level {{ game.xp.level }} &middot; {{ game.xp.title }}</h2>
+    <p class="muted" style="margin:.1rem 0 .6rem">{{ game.xp.xp }} XP &middot; {{ game.xp.next_at - game.xp.xp }} XP to level {{ game.xp.level + 1 }}</p>
+    <div class="bar thick" style="background:rgba(255,255,255,.25)" role="progressbar" aria-label="Progress to next level" aria-valuenow="{{ game.xp.percent }}" aria-valuemin="0" aria-valuemax="100"><span style="width:{{ game.xp.percent }}%;background:#fff"></span></div>
+  </div>
+  <div class="hello-meta" style="margin:0"><span class="chip">{{ icon("flame") }} {{ game.streak }}-day streak</span><span class="chip">{{ icon("calendar") }} Best {{ game.longest }} days</span><span class="chip">{{ icon("award") }} {{ game.earned|length }}/{{ game.badges|length }} badges</span></div>
+</section>
+
+<details class="card info-panel mt-2"><summary>{{ icon("info") }} How XP and streaks work <span class="grow"></span>{{ icon("chevron-down") }}</summary>
+  <ul class="muted"><li>10 XP per graded attempt, 40 per assignment mastered (80%+), 25 per verified skill level, 30 per milestone completed, 3 per study material ticked.</li>
+    <li>XP is recalculated from your stored results every time, so it can never drift or be gamed by repeating actions.</li>
+    <li>A streak counts consecutive days (UTC) with a graded attempt, a study tick or a completed milestone. It stays alive until the end of the following day.</li></ul></details>
+
+{% if game.earned %}
+<h2 class="mt-3 mb-2">Earned ({{ game.earned|length }})</h2>
+<div class="grid g-auto" style="grid-template-columns:repeat(auto-fill,minmax(210px,1fr))">{% for b in game.earned %}<div data-reveal>{{ badge_tile(b) }}</div>{% endfor %}</div>
+{% endif %}
+{% if game.locked %}
+<h2 class="mt-3 mb-2">Still to unlock ({{ game.locked|length }})</h2>
+<div class="grid g-auto" style="grid-template-columns:repeat(auto-fill,minmax(210px,1fr))">{% for b in game.locked %}<div data-reveal>{{ badge_tile(b) }}</div>{% endfor %}</div>
+{% endif %}
+
+<section class="card mt-3" data-reveal aria-labelledby="actT"><div class="card-head"><h2 id="actT">{{ icon("clock") }} Recent activity</h2></div>
+  {% if activity %}<ul class="feed">{% for a in activity %}<li><span class="dot k-{{ a.kind }}">{{ icon({"attempt": "clipboard", "study": "book", "milestone": "milestone", "roadmap": "route", "career": "compass", "badge": "award", "level": "trending"}.get(a.kind, "check")) }}</span>
+    <div>{% if a.link %}<a href="{{ a.link }}">{{ a.title }}</a>{% else %}<span class="t">{{ a.title }}</span>{% endif %}<time datetime="{{ a.created_at }}">{{ a.created_at[:16] }} UTC</time></div></li>{% endfor %}</ul>
+  {% else %}<p class="muted mb-0">Nothing yet. Complete an assignment to get started.</p>{% endif %}</section>
+{% endblock %}

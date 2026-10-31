@@ -1,0 +1,26 @@
+{% extends "base.html" %}{% from "partials/_macros.html" import csrf, icon with context %}
+{% block title %}Self-ratings | SkillzTrack{% endblock %}
+{% block content %}
+<div style="max-width:960px">
+  <ol class="crumbs" aria-label="Breadcrumb"><li><a href="/assignments">Skill assessments</a></li><li aria-current="page">Self-ratings</li></ol>
+  <h1>Self-ratings (your claims)</h1>
+  <p class="muted">Target career: <strong>{{ career.title }}</strong>. Rate how confident you are in each skill today.</p>
+  <div class="alert alert-info">{{ icon("info") }}<p><strong>Self-ratings are not evidence.</strong> They never change your skill level, gaps or roadmap. We use them to suggest where to start and to show whether your confidence matches your graded results.</p></div>
+  <div class="card card-tight mb-3"><h2 style="font-size:.95rem">Rating scale</h2><div class="grid g-3 small" style="gap:.5rem">{% for v, label in levels %}<div><strong>{{ v }}</strong> &ndash; {{ label }}</div>{% endfor %}</div></div>
+  {% if errors %}<div class="alert alert-danger" role="alert">{{ icon("alert") }}<p>{{ errors }}</p></div>{% endif %}
+  <form method="post" action="/assess">{{ csrf() }}
+    {% for r in rows %}
+    <fieldset class="card mb-2" data-reveal>
+      <div class="grid g-2" style="align-items:center">
+        <div><legend style="font-weight:700;padding:0;margin:0 0 .25rem">{{ r.name }}</legend><p class="small muted mb-1">{{ r.description }}</p>
+          <p class="small mb-0">Target for {{ career.title }}: <strong>level {{ r.required_level }}</strong> <span class="chip">{{ importance_labels[r.importance]|capitalize }}</span></p></div>
+        <div><div class="rating" role="group" aria-label="Your level in {{ r.name }}">
+          {% for v, label in levels %}<label title="{{ label }}"><input type="radio" name="skill_{{ r.skill_id }}" value="{{ v }}" data-label="{{ label }}" {% if ratings.get(r.skill_id, 0) == v %}checked{% endif %}><span>{{ v }}</span></label>{% endfor %}</div>
+          <p class="small muted mt-1 mb-0" data-level-name="skill_{{ r.skill_id }}">{{ LEVEL_LABELS[ratings.get(r.skill_id, 0)] }}</p></div>
+      </div>
+    </fieldset>
+    {% endfor %}
+    <div class="flex gap-2 wrap-row mt-3"><button class="btn btn-primary btn-lg" type="submit" data-loading-text="Saving...">Save &amp; analyse my gaps</button><a class="btn btn-ghost" href="/dashboard">Cancel</a></div>
+  </form>
+</div>
+{% endblock %}

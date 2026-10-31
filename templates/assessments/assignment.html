@@ -1,0 +1,41 @@
+{% extends "base.html" %}{% from "partials/_macros.html" import csrf, icon, confidence_badge, difficulty_chip with context %}
+{% block title %}{{ a.title }} | SkillzTrack{% endblock %}
+{% block content %}
+<div class="narrow" style="max-width:920px">
+  <ol class="crumbs" aria-label="Breadcrumb"><li><a href="/assignments">Skill assessments</a></li><li aria-current="page">{{ a.skill_name }}</li></ol>
+  <header class="flex gap-2 items-start mb-2"><span class="icon-tile solid" style="width:3.5rem;height:3.5rem;font-size:1.6rem;border-radius:16px">{{ icon(a.icon) }}</span>
+    <div><h1 class="mb-1">{{ a.title }}</h1><p class="muted mb-0">{{ a.summary }}</p></div></header>
+  <div class="chips mb-3">
+    {{ difficulty_chip(a.ceiling) }}<span class="chip chip-brand">{{ a.kind_label }}</span><span class="chip">{{ a.skill_name }}</span>
+    <span class="chip">{{ icon("clock") }} about {{ a.minutes }} min</span>
+    <span class="chip" title="The highest level this assignment can prove">Proves up to level {{ a.ceiling }} ({{ a.level_name }})</span>
+    <span class="chip">{{ evidence_labels[a.evidence] }}</span>
+  </div>
+
+  {% if runner_off %}<div class="alert alert-warning">{{ icon("alert") }}<p>Code execution is switched off on this server, so this assignment cannot be graded right now.</p></div>{% endif %}
+
+  <section class="card mb-3" aria-labelledby="doTitle">
+    <h2 id="doTitle">What you need to do</h2>
+    <div class="instr">{{ ba.instructions }}</div>
+    {% if ba.steps %}<h3 class="mt-2">Step by step</h3><ol class="mb-0">{% for s in ba.steps %}<li>{{ s }}</li>{% endfor %}</ol>{% endif %}
+    {% if ba.example %}<h3 class="mt-2">Example and expected output</h3><div class="grid g-2" style="gap:.75rem"><div><div class="small muted">You call</div><pre class="codeblock">{{ ba.example.input }}</pre></div><div><div class="small muted">It should return</div><pre class="codeblock">{{ ba.example.output }}</pre></div></div>{% endif %}
+    {% if ba.hints %}<details class="why mt-2"><summary>Stuck? Show hints</summary><ul style="padding:0 1rem 1rem 2rem;margin:0">{% for h in ba.hints %}<li>{{ h }}</li>{% endfor %}</ul></details>{% endif %}
+    {% if ba.kind == "quiz" %}<p class="pagehint mt-2 mb-0">{{ icon("info") }} {{ ba.spec.draw }} questions are drawn from a pool of {{ ba.spec.pool|length }}; the order of the answers changes every attempt.</p>{% endif %}
+  </section>
+
+  <section class="card mb-3" aria-labelledby="attTitle">
+    <h2 id="attTitle">Your attempts</h2>
+    <p class="small muted">You have used {{ used }} of {{ max_attempts }} attempts. Only your <strong>best</strong> attempt counts{% if beginner %}. This is a beginner task: retry freely, retries are never penalised{% else %}, but from the 3rd attempt each retry is worth 15% less{% if used >= 2 %}; your next attempt is worth {{ (next_retake_factor * 100)|round|int }}% of its normal value{% endif %}{% endif %}.</p>
+    {% if attempts %}<div class="table-wrap"><table class="attempt-tbl"><thead><tr><th>#</th><th>Points earned</th><th>Attempt score</th><th>When</th><th></th></tr></thead><tbody>
+      {% for t in attempts %}<tr><td>{{ t.attempt_no }}</td><td><b>{{ (t.pct * 100)|round|int }}%</b></td><td>{{ "%.1f"|format(t.skill_score) }}/5</td><td class="small muted">{{ t.graded_at }}</td><td><a href="/attempts/{{ t.id }}">Details</a></td></tr>{% endfor %}</tbody></table></div>
+    {% else %}<p class="muted mb-0">No attempts yet. Your first one is a great way to start.</p>{% endif %}
+    {% if p.verified %}<p class="small mt-2 mb-0">Your current verified score for {{ a.skill_name }}: <strong>{{ "%.1f"|format(p.score) }}/5</strong> {{ confidence_badge(p.confidence) }}</p>{% endif %}
+  </section>
+
+  {% if used >= max_attempts and not open_attempt %}<div class="alert alert-info">{{ icon("info") }}<p>You have used all your attempts for this assignment. Try another assignment for this skill.</p></div>
+  {% else %}
+  <form method="post" action="/assignments/{{ a.slug }}/start">{{ csrf() }}
+    <button class="btn btn-primary btn-lg" type="submit" {% if runner_off %}disabled{% endif %}>{% if open_attempt %}{{ icon("play") }} Continue your attempt{% elif used %}{{ icon("refresh") }} Start another attempt{% else %}{{ icon("play") }} Start assignment{% endif %}</button></form>
+  {% endif %}
+</div>
+{% endblock %}

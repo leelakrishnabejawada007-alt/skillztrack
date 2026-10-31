@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+{% from "partials/_macros.html" import icon, pips %}
+{% block content %}
+<section class="hero">
+  <div class="wrap hero-grid">
+    <div>
+      <p class="pill"><b>EVIDENCE-BASED</b> Skills verified by real assignments</p>
+      <h1>Prove your skills. <span class="grad-text">Close your gaps.</span> Land your career.</h1>
+      <p class="lead">Pick a career, complete graded quizzes and coding tasks, and see exactly where you stand. SkillzTrack turns your verified skill level into a gap analysis and a week-by-week roadmap, using rules you can read and check.</p>
+      <div class="hero-cta">
+        {% if user %}<a class="btn btn-primary btn-lg" href="/dashboard">Go to your dashboard {{ icon("arrow-right") }}</a>
+        {% else %}<a class="btn btn-primary btn-lg" href="/register">Get started free {{ icon("arrow-right") }}</a><a class="btn btn-lg" href="/login">I have an account</a>{% endif %}
+      </div>
+      <div class="hero-stats">
+        <div><strong>{{ stats.careers }}</strong><span>career paths</span></div>
+        <div><strong>{{ stats.skills }}</strong><span>skills tracked</span></div>
+        <div><strong>{{ stats.assignments }}</strong><span>graded assignments</span></div>
+        <div><strong>{{ stats.resources }}</strong><span>study resources</span></div>
+      </div>
+    </div>
+
+    {% if preview %}
+    <div class="mock" aria-label="Preview of the {{ preview.career.title }} career path">
+      <div class="flex between items-center mb-2">
+        <div><p class="eyebrow mb-0">Career path</p><h2 class="mb-0">{{ preview.career.title }}</h2></div>
+        <span class="icon-tile solid">{{ icon(preview.career.icon) }}</span>
+      </div>
+      <p class="small muted">The skills you will prove, and the level each one needs:</p>
+      {% for r in preview.rows %}
+      <div class="mock-row">
+        <span class="icon-tile">{{ icon("check-circle") }}</span>
+        <span class="grow"><strong>{{ r.name }}</strong><small>{{ ["", "nice to have", "important", "core"][r.importance] }} skill</small></span>
+        {{ pips(0, r.required_level) }}
+      </div>
+      {% endfor %}
+      <p class="xs muted mt-2 mb-0">{{ icon("info") }} Marker shows the level required. Your own bars fill as you pass assignments.</p>
+    </div>
+    {% endif %}
+  </div>
+</section>
+
+<section id="how-it-works" class="section section-alt">
+  <div class="wrap">
+    <div class="section-head"><p class="eyebrow">How it works</p><h2>From “where do I start?” to measurable progress</h2><p>Five steps. Every number along the way comes from your own graded work.</p></div>
+    <ol class="steps">
+      {% for ic, t, d in [("compass","Choose a career","Pick the role you are aiming for."),("clipboard","Prove your skills","Quizzes, Python, SQL and written tasks are graded to verify your real level."),("target","See your gaps","Your verified level against what the role requires, skill by skill."),("route","Follow a roadmap","Weekly milestones ordered by priority, each with a reason."),("trophy","Earn progress","Milestones complete and badges unlock as your evidence grows.")] %}
+      <li data-reveal><span class="icon-tile solid">{{ icon(ic) }}</span><h3>{{ t }}</h3><p>{{ d }}</p></li>
+      {% endfor %}
+    </ol>
+  </div>
+</section>
+
+<section id="features" class="section">
+  <div class="wrap">
+    <div class="section-head"><p class="eyebrow">Features</p><h2>Built to be honest about where you stand</h2><p>Most trackers let you tick a box. SkillzTrack makes you show it.</p></div>
+    <div class="grid g-3">
+      {% for ic, t, d in [
+        ("shield-check","Verified, not self-declared","Your level only rises through graded attempts. Self-ratings are shown next to the evidence so you can see how well you judge yourself."),
+        ("target","Skill-gap radar","A live radar and bar view of verified level versus the level your career needs, with a what-if simulator to test your next move."),
+        ("route","A roadmap that explains itself","Milestones are ordered by gap size and importance, respect prerequisites, and fit the hours per week you choose."),
+        ("lightbulb","Personal insights","See which single skill would raise your readiness the most, and how close your current skills already are to other careers."),
+        ("award","Badges from real evidence","Mastery, comebacks, streaks and milestones, awarded only when your stored results prove them."),
+        ("save","Never lose your work","Drafts autosave while you answer, and your progress, activity and notifications are stored in your account.")] %}
+      <article class="card feature card-hover" data-reveal><span class="icon-tile">{{ icon(ic) }}</span><h3>{{ t }}</h3><p>{{ d }}</p></article>
+      {% endfor %}
+    </div>
+  </div>
+</section>
+
+<section id="careers" class="section section-alt">
+  <div class="wrap">
+    <div class="section-head"><p class="eyebrow">Career paths</p><h2>Choose where you are headed</h2><p>Each path lists its own required skills and target levels.</p></div>
+    <div class="grid g-auto" data-filter-root>
+      {% for c in careers %}
+      <a class="card career-card card-hover" href="/careers/{{ c.slug }}" data-reveal>
+        <span class="icon-tile solid">{{ icon(c.icon) }}</span>
+        <span class="grow"><strong>{{ c.title }}</strong><small>{{ c.skill_count }} skills required</small></span>
+        {{ icon("chevron-right", "muted") }}
+      </a>
+      {% else %}<p class="muted">No careers have been added yet.</p>{% endfor %}
+    </div>
+  </div>
+</section>
+
+<section class="section">
+  <div class="wrap grid g-2 items-center" style="align-items:center">
+    <div><p class="eyebrow">Transparent by design</p><h2 style="font-size:clamp(1.6rem,3vw,2.2rem);letter-spacing:-.04em">Rule-based, not a black box</h2>
+      <p class="muted">Every recommendation comes from simple rules you can read and check by hand. Bigger gaps on more important skills come first, prerequisites come before advanced topics, and each milestone explains why it was suggested.</p></div>
+    <div class="card"><code class="formula">gap = max(0, required − yours)</code><code class="formula">priority = gap × importance</code><code class="formula mb-0" style="margin-bottom:0">readiness = Σ min(yours, required) × importance ÷ Σ required × importance</code></div>
+  </div>
+</section>
+
+<section class="section" style="padding-top:0">
+  <div class="wrap"><div class="cta-band" data-reveal>
+    <h2>Ready to see where you really stand?</h2>
+    <p>Create a free account, take your first assignment, and get your personalised gap analysis in minutes.</p>
+    <a class="btn btn-lg" href="{% if user %}/dashboard{% else %}/register{% endif %}">{% if user %}Open your dashboard{% else %}Create your free account{% endif %} {{ icon("arrow-right") }}</a>
+  </div></div>
+</section>
+{% endblock %}

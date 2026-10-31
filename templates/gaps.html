@@ -1,0 +1,93 @@
+{% extends "base.html" %}{% from "partials/_macros.html" import csrf, icon, ring, progress, page_head with context %}
+{% block title %}Skill gaps | SkillzTrack{% endblock %}
+{% block content %}
+{% call page_head("Gap analysis", "Your skill-gap analysis", "Compared with the requirements for " ~ career.title ~ ", based on what your graded assignments demonstrate. Skills without a graded assignment count as level 0.") %}
+  <a class="btn btn-primary" href="/assignments">{{ icon("clipboard") }} Take assessments</a>
+{% endcall %}
+
+<div class="grid g-main-r">
+  <section class="card card-center" data-reveal aria-labelledby="readyTitle">
+    <p class="eyebrow" id="readyTitle">Career readiness</p>
+    {{ ring(analysis.readiness_percent, "Career readiness", 170, analysis.readiness_label) }}
+    <p class="small muted mt-2 mb-2">{{ analysis.total_gap_levels }} level{{ "" if analysis.total_gap_levels == 1 else "s" }} to climb, roughly {{ analysis.estimated_hours }} hours of study.</p>
+    <div class="segbar w-full" role="img" aria-label="{{ groups.mastered|length }} mastered, {{ groups.improve|length }} to improve, {{ groups.missing|length }} missing">
+      <span class="s-ok" style="flex:{{ groups.mastered|length }}"></span><span class="s-mid" style="flex:{{ groups.improve|length }}"></span><span class="s-bad" style="flex:{{ groups.missing|length }}"></span></div>
+    <p class="xs muted mt-1 mb-0"><span class="legend-dot" style="background:#10b981"></span>{{ groups.mastered|length }} mastered <span class="legend-dot" style="background:#f59e0b;margin-left:.6rem"></span>{{ groups.improve|length }} improving <span class="legend-dot" style="background:#f43f5e;margin-left:.6rem"></span>{{ groups.missing|length }} missing</p>
+  </section>
+  <section class="card" data-reveal aria-labelledby="radarT">
+    <div class="card-head"><h2 id="radarT">{{ icon("target") }} Your level vs the target</h2></div>
+    {% set cfg = {"type": "radar", "max": 5, "title": "Verified level against required level, per skill", "labels": chart.labels,
+      "series": [{"name": "Your verified level", "values": chart.scores, "color": "#6366f1"}, {"name": "Level required", "values": chart.required, "color": "#f59e0b", "dashed": true, "fill": false}]} %}
+    <div data-chart='{{ cfg|tojson }}'></div>
+  </section>
+</div>
+
+<section class="card mt-3" data-reveal aria-labelledby="barsT">
+  <div class="card-head"><h2 id="barsT">{{ icon("chart") }} Skill by skill</h2><span class="small muted">Marker = level required</span></div>
+  {% for g in analysis.gaps %}{% set p = profile[g.skill_id] %}
+  <div class="hbar {{ 'met' if g.gap == 0 }}" role="img" aria-label="{{ g.name }}: verified level {{ g.current_level }}, required {{ g.required_level }}">
+    <span>{{ g.name }}</span>
+    <div class="hbar-track"><div class="hbar-fill" style="width: {{ (p.score / 5 * 100)|round|int }}%"></div><div class="hbar-req" style="left: calc({{ g.required_level / 5 * 100 }}% - 1px)"></div></div>
+    <b>{{ g.current_level }}/{{ g.required_level }}</b>
+  </div>
+  {% endfor %}
+</section>
+
+<div class="grid g-3 mt-3">
+  {% for key, title, ic, color, empty in [("missing","Missing skills","alert","#f43f5e","Nothing is completely missing."),("improve","Skills to improve","trending","#f59e0b","No skills need improving."),("mastered","Mastered skills","shield-check","#10b981","No skills have reached the target yet.")] %}
+  <section class="card card-accent" style="--c: {{ color }}" data-reveal>
+    <div class="card-head"><h2>{{ icon(ic) }}{{ title }} <span class="chip">{{ groups[key]|length }}</span></h2></div>
+    {% if groups[key] %}<ul class="skill-list">
+      {% for g in groups[key] %}{% set p = profile[g.skill_id] %}
+      <li style="padding:.7rem 0;border-bottom:1px solid var(--line)">
+        <div class="flex between gap-1"><strong>{{ g.name }}</strong><span class="small muted nowrap">{{ g.current_level }} &rarr; {{ g.required_level }}</span></div>
+        {% if p.verified %}<div class="small muted">Verified {{ "%.1f"|format(p.score) }}/5 &middot; {{ p.confidence }} confidence{% if p.claimed is not none and p.calibration == "overconfident" %} &middot; <span class="text-warn">you rated yourself {{ p.claimed }}</span>{% endif %}</div>
+          {% if p.weak and key != "mastered" %}<div class="small">{{ icon("target", "text-warn") }} Weak: {{ p.weak[:3]|map(attribute="topic")|join(", ") }}</div>{% endif %}
+        {% elif key != "mastered" %}<div class="small"><span class="chip">Unverified</span> <a href="/assignments#skill-{{ g.skill_id }}">take the assignment</a></div>{% endif %}
+        {% if key != "mastered" %}<div class="small muted">Gap {{ g.gap }} &middot; priority {{ g.priority }}</div>{% endif %}
+        <div class="mt-1">{{ progress(g.current_percent, g.name ~ " level", {"missing": "bad", "improve": "warn", "mastered": "good"}[key] ~ " thin") }}</div></li>{% endfor %}
+    </ul>{% else %}<p class="muted mb-0">{{ empty }}</p>{% endif %}
+  </section>
+  {% endfor %}
+</div>
+
+{% if analysis.weaknesses %}
+<section class="card mt-3" data-reveal data-sim='{{ sim|tojson }}' aria-labelledby="simT">
+  <div class="card-head"><h2 id="simT">{{ icon("lightbulb") }} What-if simulator</h2><button class="btn btn-sm" type="button" data-sim-reset>{{ icon("refresh") }} Reset</button></div>
+  <div class="grid g-main-r" style="align-items:center">
+    <div class="center">{{ ring(analysis.readiness_percent, "Projected readiness", 130, "projected") }}<p class="small muted mt-1 mb-0" data-sim-delta aria-live="polite">Move a slider to see the effect</p></div>
+    <div>
+      <p class="small muted">Drag a skill up to the level you plan to reach and watch your readiness change. This is a projection, not a verified result: levels only count once you pass assignments.</p>
+      {% for g in analysis.gaps %}{% if g.gap > 0 %}
+      <div class="sim-row"><label for="sim{{ loop.index0 }}" style="margin:0"><strong>{{ g.name }}</strong><small class="muted" style="display:block;font-weight:500">Now {{ g.current_level }}, target {{ g.required_level }}</small></label>
+        <input type="range" id="sim{{ loop.index0 }}" data-i="{{ loop.index0 }}" min="{{ g.current_level }}" max="{{ g.required_level }}" step="1" value="{{ g.current_level }}"><output for="sim{{ loop.index0 }}">Level {{ g.current_level }}</output></div>
+      {% endif %}{% endfor %}
+    </div>
+  </div>
+</section>
+{% endif %}
+
+<section class="card mt-3" data-reveal>
+  {% if analysis.weaknesses %}
+  <h2>{{ "Recalculate" if roadmap else "Generate" }} your roadmap</h2>
+  <p class="muted">Tell us how much time you can study each week. We turn your gaps into ordered weekly milestones.</p>
+  <form method="post" action="/roadmap/generate" class="flex wrap-row gap-2 items-end" data-validate novalidate>
+    {{ csrf() }}
+    <div class="field mb-0" style="margin:0;min-width:12rem"><label for="hours_per_week">Study hours per week</label>
+      <input type="number" min="2" max="40" id="hours_per_week" name="hours_per_week" value="{{ user.hours_per_week }}" data-rule="required|hours" required></div>
+    <button class="btn btn-primary" type="submit" data-loading-text="Building...">{{ icon("route") }} {{ "Recalculate roadmap" if roadmap else "Generate my roadmap" }}</button>
+  </form>
+  {% else %}
+  <p class="mb-0">{{ icon("shield-check", "text-success") }} You meet every requirement for this career. Keep your skills sharp with more <a href="/assignments">assessments</a>.</p>
+  {% endif %}
+</section>
+
+<details class="card info-panel mt-3">
+  <summary>{{ icon("info") }} How is this calculated? (rule-based, no AI) <span class="grow"></span>{{ icon("chevron-down") }}</summary>
+  <ul class="muted"><li><strong>Gap</strong> = max(0, required level &minus; your level).</li>
+    <li><strong>Priority</strong> = gap &times; importance (1 nice to have, 2 important, 3 core).</li>
+    <li><strong>Mastered</strong> = gap 0. <strong>Missing</strong> = verified level 0 or not yet verified. <strong>To improve</strong> = verified level 1 or more but below the target.</li>
+    <li><strong>Your level</strong> = floor of your verified 0-5 score, built from graded assignments (see <a href="/skill-profile">your profile</a>); self-ratings are never used.</li>
+    <li><strong>Readiness</strong> = sum of (min(yours, required) &times; importance) &divide; sum of (required &times; importance).</li></ul>
+</details>
+{% endblock %}

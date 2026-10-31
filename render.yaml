@@ -1,0 +1,33 @@
+# Render "Blueprint". Verify field names against https://render.com/docs/blueprint-spec before first use.
+services:
+  - type: web
+    name: skillztrack
+    runtime: python
+    plan: starter              # persistent disks need a paid plan; see README "Deployment" for the free-tier caveat
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn wsgi:application --workers 2 --threads 4 --bind 0.0.0.0:$PORT
+    healthCheckPath: /
+    disk:
+      name: skillztrack-data
+      mountPath: /var/data     # the SQLite file lives here so it survives deploys
+      sizeGB: 1
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.3
+      - key: SKILLZTRACK_DB
+        value: /var/data/skillztrack.db
+      - key: SKILLZTRACK_SECURE_COOKIES
+        value: "1"
+      # Student code is run in a restricted subprocess (see skillztrack/sandbox.py). That is defence in depth,
+      # NOT full isolation, so it is OFF on a public site by default: coding/debugging/testing assignments show as
+      # unavailable while quizzes, SQL, command and rubric assignments keep working. Set to "1" only if you accept
+      # the risk or grade inside an isolated container.
+      - key: SKILLZTRACK_CODE_EXEC
+        value: "0"
+      # First admin account (set once, then delete the PASSWORD variable in the dashboard):
+      - key: SKILLZTRACK_ADMIN_USERNAME
+        sync: false
+      - key: SKILLZTRACK_ADMIN_EMAIL
+        sync: false
+      - key: SKILLZTRACK_ADMIN_PASSWORD
+        sync: false

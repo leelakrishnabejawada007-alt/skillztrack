@@ -1,0 +1,152 @@
+{% extends "base.html" %}{% from "partials/_macros.html" import csrf, icon, ring, progress, pips, status_badge, badge_tile, empty with context %}
+{% block title %}Dashboard | SkillzTrack{% endblock %}
+{% block content %}
+{% set first = (user.full_name or user.username).split()[0] %}
+{% set ready = s.analysis.readiness_percent if (s.career and s.assessed) else 0 %}
+
+{# ------------------------------------------------------------------ welcome #}
+<section class="card card-grad hello" data-reveal>
+  <div>
+    <p class="eyebrow" style="color:rgba(255,255,255,.8)">Your dashboard</p>
+    <h1><span data-greeting data-name="{{ first }}">Welcome back, {{ first }}</span></h1>
+    {% if not s.career %}<p>Choose the career you are aiming for and SkillzTrack will build everything around it.</p>
+    {% elif not s.assessed %}<p>You are heading for <strong>{{ s.career.title }}</strong>. Complete your first assignment to turn this into a real, verified skill profile.</p>
+    {% elif s.analysis.weaknesses %}<p>You are <strong>{{ ready|round|int }}% ready</strong> for {{ s.career.title }}. {% if ins.levers %}Your biggest opportunity right now is <strong>{{ ins.levers[0].name }}</strong>.{% endif %}</p>
+    {% else %}<p>You meet every requirement for <strong>{{ s.career.title }}</strong>. Nicely done.</p>{% endif %}
+    <div class="hello-meta">
+      <span class="chip">{{ icon("flame") }} {{ game.streak }}-day streak</span>
+      <span class="chip">{{ icon("bolt") }} Level {{ game.xp.level }} {{ game.xp.title }}</span>
+      <span class="chip">{{ icon("award") }} {{ game.earned|length }} badge{{ "" if game.earned|length == 1 else "s" }}</span>
+    </div>
+  </div>
+  {% if s.career %}{{ ring(ready, "Career readiness", 150, "ready" if s.assessed else "not assessed") }}{% endif %}
+</section>
+
+{# ---------------------------------------------------------------- career picker #}
+<div class="mt-3">
+  {% if s.career %}<button class="btn btn-sm" type="button" data-collapse-toggle="#careerPicker" aria-expanded="false" aria-controls="careerPicker">{{ icon("refresh") }} Change target career</button>{% endif %}
+  <div id="careerPicker" class="{% if s.career %}collapse{% endif %} mt-2" {% if s.career %}role="region" aria-label="Choose a career"{% endif %}>
+    {% if not s.career %}<div class="mt-3 mb-2"><h2 class="mb-0">Choose your target career</h2><p class="muted">Pick the role you are aiming for. You can change it any time, and your verified skills carry over.</p></div>{% endif %}
+    <div class="grid g-auto" data-filter-root>
+      {% for c in careers %}{% set current = s.career and s.career.id == c.id %}
+      <form method="post" action="/career" data-filter-item>{{ csrf() }}<input type="hidden" name="career_id" value="{{ c.id }}">
+        <button class="career-pick {{ 'is-current' if current }}" type="submit" {% if current %}aria-current="true"{% endif %}>
+          <span class="icon-tile solid">{{ icon(c.icon) }}</span>
+          <span class="grow"><strong>{{ c.title }}</strong><small>{{ c.skill_count }} skills</small></span>
+          <span class="chip {{ 'chip-brand' if current }}">{{ "Current goal" if current else "Choose" }}</span>
+        </button></form>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+
+{% if s.career %}
+{# ------------------------------------------------------------------ summary stats #}
+<section class="grid g-4 keep-2 mt-3" aria-label="Progress summary">
+  <article class="card stat card-tight" data-reveal><div class="stat-top">Career readiness <span class="icon-tile">{{ icon("target") }}</span></div>
+    <strong><span data-count="{{ ready|round|int }}">{{ ready|round|int }}</span><small>%</small></strong>
+    <span>{% if s.assessed %}{{ s.analysis.readiness_label }}{% else %}Take an assignment to start{% endif %}</span></article>
+  <article class="card stat card-tight" data-reveal><div class="stat-top">Skills verified <span class="icon-tile">{{ icon("shield-check") }}</span></div>
+    <strong>{{ s.skills_verified }}<small> / {{ s.skills_total }}</small></strong><span>{{ s.skills_verified }}/{{ s.skills_total }} skills verified by assignments &middot; {{ s.skills_ready }} meet the target</span></article>
+  <article class="card stat card-tight" data-reveal><div class="stat-top">Roadmap progress <span class="icon-tile">{{ icon("route") }}</span></div>
+    <strong><span data-count="{{ s.overall_percent }}">{{ s.overall_percent }}</span><small>%</small></strong>
+    <span>{% if s.roadmap %}{{ s.milestones_done }} of {{ s.milestones_total }} milestones{% else %}No roadmap yet{% endif %}</span></article>
+  <article class="card stat card-tight" data-reveal><div class="stat-top">Learner XP <span class="icon-tile">{{ icon("bolt") }}</span></div>
+    <strong>{{ game.xp.xp }}<small> XP</small></strong>{{ progress(game.xp.percent, "Progress to level " ~ (game.xp.level + 1), "thin") }}
+    <span style="margin-top:.35rem">{{ game.xp.next_at - game.xp.xp }} XP to level {{ game.xp.level + 1 }}</span></article>
+</section>
+
+{# ------------------------------------------------------------- radar + next steps #}
+<div class="grid g-main mt-3">
+  <div class="stack">
+  <section class="card" data-reveal aria-labelledby="radarTitle">
+    <div class="card-head"><h2 id="radarTitle">{{ icon("target") }} Skill radar</h2><a class="card-link" href="/gaps">Full gap analysis {{ icon("arrow-right") }}</a></div>
+    {% set cfg = {"type": "radar", "max": 5, "title": "Verified level against the level " ~ s.career.title ~ " requires",
+      "labels": chart.labels, "series": [{"name": "Your verified level", "values": chart.verified, "color": "#6366f1"}, {"name": "Level required", "values": chart.required, "color": "#f59e0b", "dashed": true, "fill": false}]} %}
+    <div data-chart='{{ cfg|tojson }}'></div>
+    {% if not s.assessed %}<p class="pagehint mt-2">{{ icon("info") }} <span>Your own shape is flat until you complete an assignment. The dashed line is what {{ s.career.title }} requires.</span></p>{% endif %}
+  </section>
+<section class="card" data-reveal aria-labelledby="skillsTitle">
+  <div class="card-head"><h2 id="skillsTitle">{{ icon("layers") }} Skill levels for {{ s.career.title }}</h2><a class="card-link" href="/skill-profile">Verified profile {{ icon("arrow-right") }}</a></div>
+  <ul class="skill-list">
+    {% for r in ins.rows %}
+    <li class="skill-row">
+      <div><strong>{{ r.name }}</strong><small>{{ r.category }} &middot; {{ ["", "nice to have", "important", "core"][r.importance] }}</small></div>
+      <div>{{ pips(r.level, r.required, r.score) }}</div>
+      <div class="flex items-center gap-1" style="justify-content:flex-end">
+        <span class="val">{% if r.verified %}L{{ r.level }}<span class="muted">/{{ r.required }}</span>{% else %}<span class="muted">L0/{{ r.required }}</span>{% endif %}</span>
+        {% if r.met %}<span class="chip chip-success">{{ icon("check") }} Met</span>{% elif r.verified %}<span class="chip chip-warn">Gap {{ r.required - r.level }}</span>{% else %}<span class="chip">Unverified</span>{% endif %}
+      </div>
+    </li>
+    {% endfor %}
+  </ul>
+  <p class="pagehint mb-0 mt-2">{{ icon("info") }} <span>Filled segments are your verified level; the outlined segment is the level the career requires. Unverified skills count as level 0.</span></p>
+</section>
+
+  </div>
+
+  <div class="stack">
+    <section class="card" data-reveal aria-labelledby="stepsTitle">
+      <div class="card-head"><h2 id="stepsTitle">{{ icon("rocket") }} Your next steps</h2></div>
+      {% for st in ins.steps %}
+      <a class="step" href="{{ st.href }}"><span class="icon-tile{{ ' solid' if loop.first }}">{{ icon(st.icon) }}</span><span class="grow"><strong>{{ st.title }}</strong><small>{{ st.text }}</small></span><span class="go">{{ icon("chevron-right") }}</span></a>
+      {% else %}<p class="muted mb-0">You are all caught up. Check back after your next assignment.</p>{% endfor %}
+    </section>
+
+    <section class="card" data-reveal aria-labelledby="upTitle">
+      <div class="card-head"><h2 id="upTitle">{{ icon("calendar") }} Up next</h2>{% if s.roadmap %}<a class="card-link" href="/roadmap">Roadmap {{ icon("arrow-right") }}</a>{% endif %}</div>
+      {% if s.up_next %}
+      <ol class="timeline">
+        {% for m in s.up_next %}
+        <li><div class="flex between wrap-row gap-1"><strong>{{ m.title }}</strong>{{ status_badge(m.status) }}</div>
+          <p class="small muted mb-1">{% if m.start_date %}{{ m.start_date }} &ndash; {{ m.end_date }} &middot; {% endif %}weeks {{ m.start_week }}&ndash;{{ m.end_week }} &middot; about {{ m.hours }} h</p>
+          {{ progress(m.percent, "Study progress for " ~ m.skill_name, "thin") }}</li>
+        {% endfor %}
+      </ol>
+      {% if ins.pace %}<p class="pagehint mt-2 mb-0">{{ icon("clock") }} <span>About {{ ins.pace.hours }} h left. At {{ ins.pace.per_week }} h a week you could finish around <strong>{{ ins.pace.finish }}</strong> ({{ ins.pace.weeks }} weeks).</span></p>{% endif %}
+      {% elif s.roadmap %}<p class="mb-0">{{ icon("trophy", "text-brand") }} Every milestone is complete. Review your <a href="/gaps">skill gaps</a> to confirm you are ready.</p>
+      {% elif s.assessed and s.analysis.weaknesses %}<p class="muted">You have skill gaps but no roadmap yet.</p><a class="btn btn-primary" href="/gaps">Review gaps &amp; build roadmap</a>
+      {% elif s.assessed %}<p class="mb-0">{{ icon("shield-check", "text-brand") }} You already meet every requirement for this career.</p>
+      {% else %}<p class="muted">Your roadmap appears here after your first verified assignment.</p><a class="btn btn-primary" href="/assignments">Take your first assignment</a>{% endif %}
+    </section>
+  </div>
+</div>
+
+{# ----------------------------------------------- insights, achievements, activity #}
+<div class="grid g-3 mt-3">
+  <section class="card" data-reveal aria-labelledby="insTitle">
+    <div class="card-head"><h2 id="insTitle">{{ icon("lightbulb") }} Career insights</h2></div>
+    {% if ins.levers %}
+      <p class="small muted mb-1">Biggest readiness boosts if you closed the gap:</p>
+      {% for lv in ins.levers %}<div class="lever"><span><strong>{{ lv.name }}</strong><small class="muted" style="display:block">Level {{ lv.from }} &rarr; {{ lv.to }}</small></span><b>+{{ "%g"|format(lv.delta) }}%</b></div>{% endfor %}
+    {% elif s.assessed %}<p class="mb-0">{{ icon("check-circle", "text-success") }} No open gaps. Every requirement is met.</p>
+    {% else %}<p class="muted mb-0">Complete an assignment and SkillzTrack will show which skill gives you the biggest boost.</p>{% endif %}
+    {% if ins.match|length > 1 %}
+      <hr class="divider"><p class="small muted mb-1">How your verified skills fit other careers:</p>
+      {% for m in ins.match[:4] %}
+      <div class="match-row"><span class="icon-tile">{{ icon(m.icon) }}</span><span><strong>{{ m.title }}{% if m.is_target %} <span class="chip chip-brand">Target</span>{% endif %}</strong>{{ progress(m.readiness, m.title ~ " match", "thin") }}</span><b>{{ m.readiness|round|int }}%</b></div>
+      {% endfor %}
+    {% endif %}
+  </section>
+
+  <section class="card" data-reveal aria-labelledby="achTitle">
+    <div class="card-head"><h2 id="achTitle">{{ icon("award") }} Achievements</h2><a class="card-link" href="/achievements">All badges {{ icon("arrow-right") }}</a></div>
+    {% if game.earned %}<div class="grid g-2" style="gap:.75rem">{% for b in game.earned[:2] %}{{ badge_tile(b) }}{% endfor %}</div>{% endif %}
+    {% if game.locked %}
+      <p class="small muted mt-2 mb-1">Closest to unlocking:</p>
+      {% for b in game.locked[:2] %}<div class="lever"><span><strong>{{ b.name }}</strong><small class="muted" style="display:block">{{ b.description }}</small></span><span class="small muted nowrap">{{ b.value|round|int }}/{{ b.target }}</span></div>{{ progress(b.percent, b.name ~ " progress", "thin") }}{% endfor %}
+    {% endif %}
+  </section>
+
+  <section class="card" data-reveal aria-labelledby="actTitle">
+    <div class="card-head"><h2 id="actTitle">{{ icon("clock") }} Recent activity</h2></div>
+    {% if activity %}
+    <ul class="feed">
+      {% for a in activity %}<li><span class="dot k-{{ a.kind }}">{{ icon({"attempt": "clipboard", "study": "book", "milestone": "milestone", "roadmap": "route", "career": "compass", "badge": "award", "level": "trending"}.get(a.kind, "check")) }}</span>
+        <div>{% if a.link %}<a href="{{ a.link }}">{{ a.title }}</a>{% else %}<span class="t">{{ a.title }}</span>{% endif %}<time datetime="{{ a.created_at }}">{{ a.created_at[:16] }} UTC</time></div></li>{% endfor %}
+    </ul>
+    {% else %}<p class="muted mb-0">Nothing yet. Your assignments, study ticks and milestones will appear here.</p>{% endif %}
+  </section>
+</div>
+{% endif %}
+{% endblock %}
